@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Move2Improve stopwatch icon">
+  <rect width="512" height="512" rx="96" fill="#113c37"/>
+  <circle cx="256" cy="282" r="142" fill="#f4f0e8"/>
+  <path d="M206 82h100v54H206zM236 132h40v42h-40zM256 282l76-68" fill="none" stroke="#0d6b57" stroke-width="34" stroke-linecap="round"/>
+  <path d="M176 296l44 44 116-132" fill="none" stroke="#113c37" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

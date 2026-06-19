@@ -1,0 +1,23 @@
+{
+  "name": "m2i-stopwatch-pwa",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Move2Improve stopwatch PWA that signs Nostr workout duration claims locally.",
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "build": "node scripts/build.mjs",
+    "preview": "node scripts/dev-server.mjs --dist-only --port 4173",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@noble/ciphers": "file:/Users/lieschen/Projects/move2improve/node_modules/@noble/ciphers",
+    "@noble/curves": "file:/Users/lieschen/Projects/move2improve/node_modules/@noble/curves",
+    "@noble/hashes": "file:/Users/lieschen/Projects/move2improve/node_modules/@noble/hashes",
+    "@scure/base": "file:/Users/lieschen/Projects/move2improve/node_modules/@scure/base",
+    "@scure/bip32": "file:/Users/lieschen/Projects/move2improve/node_modules/@scure/bip32",
+    "@scure/bip39": "file:/Users/lieschen/Projects/move2improve/node_modules/@scure/bip39",
+    "nostr-tools": "file:/Users/lieschen/Projects/move2improve/node_modules/nostr-tools",
+    "nostr-wasm": "file:/Users/lieschen/Projects/move2improve/node_modules/nostr-wasm"
+  }
+}
