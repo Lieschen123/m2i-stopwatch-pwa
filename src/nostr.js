@@ -63,6 +63,34 @@ export function signClaimEvent({ claim, challengeCode, durationSeconds, targetSe
   };
 }
 
+export function signPublicClaimEvent({ publicClaim, challengeCode, nsec }) {
+  const { secretKey, pubkey } = keyInfoFromNsec(nsec);
+  const tags = [
+    ['d', `${challengeCode}:public:${publicClaim.claim_hash.slice(0, 12)}`],
+    ['duration', String(publicClaim.duration_seconds)],
+    ['client', CLIENT_NAME],
+    ['privacy', 'redacted-public'],
+    ['t', 'm2i']
+  ];
+  if (publicClaim.distance_meters !== undefined) tags.push(['distance_m', String(publicClaim.distance_meters)]);
+
+  const event = finalizeEvent(
+    {
+      kind: CLAIM_KIND,
+      pubkey,
+      created_at: Math.floor(Date.now() / 1000),
+      tags,
+      content: publicClaim.canonical_json
+    },
+    secretKey
+  );
+
+  return {
+    ...event,
+    verified: verifyEvent(event)
+  };
+}
+
 export async function publishEvent(relays, event, timeoutMs = 8000) {
   const pool = new SimplePool();
   const relayList = relays.filter((relay) => relay.startsWith('wss://'));

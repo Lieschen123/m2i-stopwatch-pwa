@@ -11,10 +11,10 @@
 * { box-sizing: border-box; }
 html, body, #app { min-height: 100%; margin: 0; }
 body { background: linear-gradient(180deg, #f7f3ea 0%, #eaf2ee 100%); }
-button, input, textarea { font: inherit; letter-spacing: 0; }
+button, input, textarea, select { font: inherit; letter-spacing: 0; }
 button { min-height: 48px; border: 0; border-radius: 8px; padding: 0 18px; font-weight: 750; cursor: pointer; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
-input, textarea {
+input, textarea, select {
   width: 100%;
   border: 1px solid #b9c6bf;
   border-radius: 8px;
@@ -25,6 +25,7 @@ input, textarea {
 }
 textarea { resize: vertical; }
 label { display: block; font-weight: 700; color: #263a36; }
+fieldset { min-width: 0; margin: 0; }
 
 .app-shell {
   width: min(760px, 100%);
@@ -44,6 +45,7 @@ h1 { font-size: 2rem; line-height: 1.05; }
 h2 { font-size: 1.35rem; line-height: 1.2; margin-bottom: 14px; }
 .eyebrow { color: #5a6a64; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; }
 .muted { color: #64736e; line-height: 1.5; margin-bottom: 18px; }
+.fineprint { color: #64736e; font-size: 0.9rem; line-height: 1.45; margin-top: -8px; }
 .notice {
   background: #dcefe6;
   border: 1px solid #99c9b4;
@@ -82,6 +84,16 @@ h2 { font-size: 1.35rem; line-height: 1.2; margin-bottom: 14px; }
 .secret-box textarea, .json-output { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.86rem; }
 .checkline { display: flex; gap: 10px; align-items: center; }
 .checkline input { width: auto; margin: 0; }
+.privacy-check { align-items: flex-start; }
+.stake-box {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #c7d6d0;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f6fbf8;
+}
+.stake-box legend { padding: 0 6px; font-weight: 850; color: #173c31; }
 .workout-screen {
   min-height: calc(100vh - 120px);
   display: flex;
@@ -100,6 +112,7 @@ h2 { font-size: 1.35rem; line-height: 1.2; margin-bottom: 14px; }
   line-height: 1;
 }
 .target { min-height: 28px; color: #40524d; font-size: 1.05rem; font-weight: 700; }
+.distance { color: #0d6b57; }
 .claim-summary {
   display: grid;
   grid-template-columns: 1fr auto auto;
@@ -110,6 +123,18 @@ h2 { font-size: 1.35rem; line-height: 1.2; margin-bottom: 14px; }
   background: #eef5f1;
 }
 .claim-summary strong { overflow-wrap: anywhere; }
+.payment-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #bdd2c9;
+  border-radius: 8px;
+  padding: 16px;
+  background: #f5fbf8;
+}
+.payment-card h3 { margin: 0; font-size: 1.1rem; }
+.payment-card dl { display: grid; gap: 10px; margin: 0; }
+.payment-card dt { color: #64736e; font-size: 0.8rem; font-weight: 800; text-transform: uppercase; }
+.payment-card dd { margin: 3px 0 0; overflow-wrap: anywhere; }
 .history-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

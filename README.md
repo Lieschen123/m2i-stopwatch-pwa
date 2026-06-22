@@ -1,6 +1,6 @@
 # Move2Improve Stopwatch PWA
 
-A static, browser-only stopwatch that signs workout duration claims with a local Nostr key. No server, no registration, no sensors, no GPS, no HealthKit, no analytics.
+A static, browser-only stopwatch that signs workout duration claims with a local Nostr key. No server, no registration, no HealthKit, no analytics. GPS is off by default; if the user enables it for one workout, the app computes aggregate distance locally and discards route points at finish.
 
 ## What It Does
 
@@ -9,7 +9,8 @@ A static, browser-only stopwatch that signs workout duration claims with a local
 - Runs a timestamp-based stopwatch that survives tab backgrounding and can resume from stored active state.
 - Requests Wake Lock only after the user starts a workout.
 - Creates canonical JSON claims and signs them as Nostr addressable events.
-- Publishes to user-configured Nostr relays or wraps the event as a NIP-17 DM to a counterpart npub.
+- Copies private settlement claims or wraps them as a NIP-17 DM to a counterpart npub.
+- Publishes only a separate redacted public share event when the user explicitly opts in.
 - Keeps local claim history for copy/resend.
 - Installs as an offline-capable PWA.
 
@@ -110,7 +111,9 @@ Expected:
 ## Privacy Checklist
 
 - Private key is never sent to relays or servers.
-- Only signed public Nostr events or NIP-17 wrapped messages are transmitted.
+- Private settlement claims are copied locally or sent by NIP-17 DM.
+- Public Nostr sharing is opt-in and redacted.
+- Optional GPS route points are memory-only and discarded at finish; only aggregate distance can be signed.
 - No cookies.
 - No analytics.
 - No third-party runtime scripts or CDNs.

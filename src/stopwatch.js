@@ -1,10 +1,24 @@
-export function createWorkout({ challengeCode, targetMinutes, counterpartNpub, note, startedAt = Date.now() }) {
+export function createWorkout({
+  challengeCode,
+  targetMinutes,
+  counterpartNpub,
+  note,
+  gpsEnabled = false,
+  usdtStakeAmount,
+  usdtNetwork,
+  usdtRecipient,
+  startedAt = Date.now()
+}) {
   const targetSeconds = Number(targetMinutes) > 0 ? Math.round(Number(targetMinutes) * 60) : null;
   return {
     challengeCode,
     targetSeconds,
     counterpartNpub: counterpartNpub || '',
     note: note || '',
+    gpsEnabled: Boolean(gpsEnabled),
+    usdtStakeAmount: usdtStakeAmount || '',
+    usdtNetwork: usdtNetwork || 'ton',
+    usdtRecipient: usdtRecipient || '',
     startedAt
   };
 }
