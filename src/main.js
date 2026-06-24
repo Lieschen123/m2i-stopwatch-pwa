@@ -304,9 +304,9 @@ function renderHomeScreen() {
       <fieldset class="stake-box">
         <legend>Optional sats / Lightning settlement request</legend>
         <label>Amount, sats<input name="satsAmount" inputmode="numeric" type="number" min="1" step="1" placeholder="2100"></label>
-        <label>Lightning invoice, LNURL, or BTC address<input name="satsRecipient" autocomplete="off" spellcheck="false" placeholder="lnbc..., lightning:..., LNURL..., or bc1..."></label>
-        <label>Payment URI, optional<input name="satsPaymentUri" autocomplete="off" spellcheck="false" placeholder="lightning:lnbc... or bitcoin:bc1..."></label>
-        <label>Manual instructions, optional<textarea name="satsInstructions" maxlength="800" rows="3" placeholder="Pay from your own wallet after final settlement."></textarea></label>
+        <label>Team jar / recipient invoice, LNURL, or BTC address<input name="satsRecipient" autocomplete="off" spellcheck="false" placeholder="Team jar LNURL, lnbc..., lightning:..., or bc1..."></label>
+        <label>Payment URI, optional<input name="satsPaymentUri" autocomplete="off" spellcheck="false" placeholder="lightning:lnurl... or bitcoin:bc1..."></label>
+        <label>Manual instructions, optional<textarea name="satsInstructions" maxlength="800" rows="3" placeholder="Pay the agreed Teamkasse/cause from your own wallet after final settlement."></textarea></label>
       </fieldset>
       <button type="submit" class="primary">Create challenge</button>
     </form>
@@ -422,7 +422,7 @@ function renderPaymentRequests(entry) {
       ['Asset', paymentRequest.asset],
       ['Amount', isSats ? (paymentRequest.amount_sats ? `${paymentRequest.amount_sats} sats` : 'Sats amount not specified') : `${paymentRequest.amount.toFixed(2)} USDt`],
       ['Network', paymentRequest.network ? paymentRequest.network.toUpperCase() : 'manual'],
-      ['Recipient', paymentRequest.recipient || 'See instructions'],
+      ['Team jar / recipient', paymentRequest.recipient || 'See instructions'],
       ['Payment URI', paymentRequest.payment_uri || 'None provided'],
       ['Reference', paymentRequest.reference],
       ['Instructions', paymentRequest.instruction],
@@ -430,7 +430,7 @@ function renderPaymentRequests(entry) {
     ];
     return `
     <section class="payment-card">
-      <p class="eyebrow">${isSats ? 'Sats / Lightning payment request' : 'USDt payment request'}</p>
+      <p class="eyebrow">${isSats ? 'Sats / Lightning team jar request' : 'USDt payment request'}</p>
       <h3>${title}</h3>
       <dl>
         ${rows.map(([term, value]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}

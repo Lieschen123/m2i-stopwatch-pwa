@@ -58,7 +58,7 @@ export function createSatsPaymentRequest({ amountSats, recipient, paymentUri, in
   const reference = cleanText(`${challengeCode || 'M2I'}:${String(claimHash || '').slice(0, 16)}`, 120);
   const instruction = cleanInstructions || [
     sats ? `Pay ${sats} sats` : 'Pay sats',
-    cleanRecipient ? `to ${cleanRecipient}` : '',
+    cleanRecipient ? `to team jar / recipient ${cleanRecipient}` : '',
     'using your own Lightning or Bitcoin wallet'
   ].filter(Boolean).join(' ');
   const request = {
@@ -78,7 +78,7 @@ export function createSatsPaymentRequest({ amountSats, recipient, paymentUri, in
     payment_uri: cleanPaymentUri,
     request_text: [
       request.instruction,
-      cleanRecipient ? `Address / invoice: ${cleanRecipient}` : '',
+      cleanRecipient ? `Team jar / recipient address or invoice: ${cleanRecipient}` : '',
       cleanPaymentUri ? `Payment URI: ${cleanPaymentUri}` : '',
       `Reference: ${request.reference}`,
       `Memo: ${request.memo}`,

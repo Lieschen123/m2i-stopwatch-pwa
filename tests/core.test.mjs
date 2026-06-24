@@ -427,9 +427,8 @@ test('creates manual sats payment request without wallet integration fields in c
   });
   const request = createSatsPaymentRequest({
     amountSats: '2100',
-    recipient: 'lnbc2100n1ptestinvoice',
-    paymentUri: 'lightning:lnbc2100n1ptestinvoice',
-    instructions: 'Pay from your own Lightning wallet.',
+    recipient: 'lnurl1teamjar',
+    paymentUri: 'lightning:lnurl1teamjar',
     challengeCode: claim.challenge_code,
     claimHash: claim.claim_hash
   });
@@ -439,6 +438,8 @@ test('creates manual sats payment request without wallet integration fields in c
   assert.equal(request.custody, 'user-paid');
   assert.equal(request.settlement_model, 'payment-request-only');
   assert.match(request.payment_uri, /^lightning:/);
+  assert.match(request.request_text, /team jar \/ recipient/);
+  assert.match(request.request_text, /Team jar \/ recipient address or invoice/);
   assert.match(request.request_text, /does not custody funds, connect to your wallet, monitor settlement, or initiate this payment/);
   assert.equal('recipient' in claim, false);
   assert.equal('amount_sats' in claim, false);
