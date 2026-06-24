@@ -40,6 +40,29 @@ export function createStorage(storage = globalThis.localStorage) {
     clearActiveWorkout() {
       storage.removeItem(STORAGE_KEYS.activeWorkout);
     },
+    getChallenges() {
+      const challenges = readJson(storage, STORAGE_KEYS.challenges, []);
+      return Array.isArray(challenges) ? challenges : [];
+    },
+    saveChallenge(challenge) {
+      const existing = this.getChallenges().filter((item) => item.id !== challenge.id);
+      writeJson(storage, STORAGE_KEYS.challenges, [challenge, ...existing].slice(0, 50));
+      storage.setItem(STORAGE_KEYS.activeChallenge, challenge.id);
+      return challenge;
+    },
+    getChallenge(id) {
+      return this.getChallenges().find((challenge) => challenge.id === id) || null;
+    },
+    getActiveChallengeId() {
+      return storage.getItem(STORAGE_KEYS.activeChallenge) || '';
+    },
+    setActiveChallengeId(id) {
+      if (id) storage.setItem(STORAGE_KEYS.activeChallenge, id);
+    },
+    clearChallenges() {
+      storage.removeItem(STORAGE_KEYS.challenges);
+      storage.removeItem(STORAGE_KEYS.activeChallenge);
+    },
     getHistory() {
       const history = readJson(storage, STORAGE_KEYS.history, []);
       return Array.isArray(history) ? history : [];

@@ -12,6 +12,8 @@ export const STORAGE_KEYS = {
   secret: 'm2i.nostr.nsec',
   profile: 'm2i.profile.v1',
   activeWorkout: 'm2i.activeWorkout.v1',
+  challenges: 'm2i.challenges.v1',
+  activeChallenge: 'm2i.activeChallenge.v1',
   history: 'm2i.history.v1',
   relays: 'm2i.relays.v1'
 };

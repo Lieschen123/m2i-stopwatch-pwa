@@ -4,6 +4,7 @@ import { createClaim, createHistoryEntry, createPublicClaimProjection } from './
 import { formatDuration, shortNpub, clampText } from './format.js';
 import { generateNsec, keyInfoFromNsec, parseNpub, publishEvent, signClaimEvent, signPublicClaimEvent, createNip17DirectMessage } from './nostr.js';
 import { createSatsPaymentRequest, createUsdtPaymentRequest } from './payment.js';
+import { computeChallengeProgress, createChallengePlan, createChallengeSettlement, createInviteText } from './challenge.js';
 import { createGpsTracker } from './gps.js';
 import { createStorage } from './storage.js';
 import { createWorkout, elapsedMs, requestWakeLock, targetDeltaSeconds } from './stopwatch.js';
@@ -20,6 +21,7 @@ let state = {
   gpsTracker: null,
   gpsSummary: null,
   lastSigned: null,
+  activeChallengeId: store.getActiveChallengeId(),
   publishResults: [],
   message: ''
 };
@@ -85,27 +87,60 @@ function updateWorkoutClock() {
   }
 }
 
-async function beginWorkout(form) {
+function createChallengeFromForm(form) {
   const data = new FormData(form);
-  const challengeCode = clampText(data.get('challengeCode'), 80);
+  const code = clampText(data.get('challengeCode'), 80);
+  if (!code) throw new Error('Challenge code is required.');
+  const paymentRequests = [
+    createUsdtPaymentRequest({
+      amount: clampText(data.get('usdtStakeAmount'), 24),
+      recipient: clampText(data.get('usdtRecipient'), 220),
+      network: clampText(data.get('usdtNetwork'), 24),
+      challengeCode: code
+    }),
+    createSatsPaymentRequest({
+      amountSats: clampText(data.get('satsAmount'), 24),
+      recipient: clampText(data.get('satsRecipient'), 320),
+      paymentUri: clampText(data.get('satsPaymentUri'), 520),
+      instructions: clampText(data.get('satsInstructions'), 800),
+      challengeCode: code
+    })
+  ].filter(Boolean);
+  return createChallengePlan({
+    code,
+    durationDays: data.get('durationDays'),
+    requiredActiveDays: data.get('requiredActiveDays'),
+    minMinutesPerActiveDay: data.get('minMinutesPerActiveDay'),
+    minDistanceKm: data.get('minDistanceKm'),
+    participantsText: clampText(data.get('participantsText'), 1200),
+    paymentRequests
+  });
+}
+
+async function beginWorkout(form, challenge = null) {
+  const data = new FormData(form);
+  const challengeCode = challenge?.code || clampText(data.get('challengeCode'), 80);
   if (!challengeCode) return setState({ message: 'Challenge code is required.' });
   const counterpartNpub = clampText(data.get('counterpartNpub'), 120);
   if (counterpartNpub) {
     try { parseNpub(counterpartNpub); } catch { return setState({ message: 'Counterpart must be a valid npub.' }); }
   }
+  const usdtRequest = challenge?.paymentRequests?.find((request) => request.asset === 'USDt');
+  const satsRequest = challenge?.paymentRequests?.find((request) => request.asset === 'sats');
   const workout = createWorkout({
+    challengeId: challenge?.id || '',
     challengeCode,
-    targetMinutes: data.get('targetMinutes'),
+    targetMinutes: challenge ? challenge.minMinutesPerActiveDay : data.get('targetMinutes'),
     counterpartNpub,
     note: clampText(data.get('note'), 280),
     gpsEnabled: data.get('gpsEnabled') === 'on',
-    usdtStakeAmount: clampText(data.get('usdtStakeAmount'), 24),
-    usdtNetwork: clampText(data.get('usdtNetwork'), 24),
-    usdtRecipient: clampText(data.get('usdtRecipient'), 220),
-    satsAmount: clampText(data.get('satsAmount'), 24),
-    satsRecipient: clampText(data.get('satsRecipient'), 320),
-    satsPaymentUri: clampText(data.get('satsPaymentUri'), 520),
-    satsInstructions: clampText(data.get('satsInstructions'), 800)
+    usdtStakeAmount: usdtRequest?.amount || clampText(data.get('usdtStakeAmount'), 24),
+    usdtNetwork: usdtRequest?.network || clampText(data.get('usdtNetwork'), 24),
+    usdtRecipient: usdtRequest?.recipient || clampText(data.get('usdtRecipient'), 220),
+    satsAmount: satsRequest?.amount_sats || clampText(data.get('satsAmount'), 24),
+    satsRecipient: satsRequest?.recipient || clampText(data.get('satsRecipient'), 320),
+    satsPaymentUri: satsRequest?.payment_uri || clampText(data.get('satsPaymentUri'), 520),
+    satsInstructions: satsRequest?.instruction || clampText(data.get('satsInstructions'), 800)
   });
   store.setActiveWorkout(workout);
   const wakeLock = await requestWakeLock();
@@ -132,6 +167,7 @@ async function finishWorkout() {
     state.gpsTracker.stop();
   }
   const claim = createClaim({
+    challengeId: state.activeWorkout.challengeId,
     challengeCode: state.activeWorkout.challengeCode,
     startedAt: state.activeWorkout.startedAt,
     stoppedAt,
@@ -208,6 +244,7 @@ function render() {
   if (state.screen === 'loading') return;
   if (state.screen === 'key') return renderKeyScreen();
   if (state.screen === 'workout') return renderWorkoutScreen();
+  if (state.screen === 'challenge') return renderChallengeScreen();
   if (state.screen === 'claim') return renderClaimScreen(state.lastSigned);
   if (state.screen === 'history') return renderHistoryScreen();
   if (state.screen === 'settings') return renderSettingsScreen();
@@ -237,37 +274,96 @@ function renderKeyScreen() {
 
 function renderHomeScreen() {
   const profile = store.getProfile();
+  const challenges = store.getChallenges();
+  const history = store.getHistory();
   renderShell(`
     <section class="identity-strip">
       <span>${escapeHtml(profile.displayName || 'Ready')}</span>
       <strong>${shortNpub(state.key.npub)}</strong>
     </section>
-    <form class="panel stack" data-form="challenge">
-      <h2>New Challenge</h2>
-      <label>Challenge code<input name="challengeCode" required maxlength="80" placeholder="RUN-2026-06-20-JOGGING"></label>
-      <label>Target duration, minutes<input name="targetMinutes" inputmode="decimal" type="number" min="1" step="1" placeholder="30"></label>
-      <label>Counterpart npub, optional<input name="counterpartNpub" autocomplete="off" spellcheck="false" placeholder="npub1..."></label>
-      <label class="checkline privacy-check"><input type="checkbox" name="gpsEnabled"> Add local GPS aggregate distance</label>
-      <p class="fineprint">Optional. Route points stay in memory during this workout and are discarded at finish. This is local movement verification, not GPS proof.</p>
+    ${challenges.length ? `<section class="panel stack"><h2>Active challenges</h2>${challenges.map((challenge) => renderChallengeCard(challenge, history)).join('')}</section>` : ''}
+    <form class="panel stack" data-form="create-challenge">
+      <h2>Create Challenge</h2>
+      <label>Challenge name/code<input name="challengeCode" required maxlength="80" placeholder="JUNE-RUN"></label>
+      <div class="form-grid">
+        <label>Window, days<input name="durationDays" inputmode="numeric" type="number" min="1" step="1" value="30"></label>
+        <label>Required active days<input name="requiredActiveDays" inputmode="numeric" type="number" min="1" step="1" value="10"></label>
+      </div>
+      <div class="form-grid">
+        <label>Minimum minutes per active day<input name="minMinutesPerActiveDay" inputmode="numeric" type="number" min="1" step="1" value="45"></label>
+        <label>Optional minimum km<input name="minDistanceKm" inputmode="decimal" type="number" min="0" step="0.1" placeholder="off"></label>
+      </div>
+      <label>Participants, one per line<textarea name="participantsText" maxlength="1200" rows="4" placeholder="Nono\nAlex\nMia"></textarea></label>
       <fieldset class="stake-box">
-        <legend>Optional USDt payment request</legend>
-        <label>Amount<input name="usdtStakeAmount" inputmode="decimal" type="number" min="0" step="0.01" placeholder="5.00"></label>
+        <legend>Optional USDt settlement request</legend>
+        <label>Amount<input name="usdtStakeAmount" inputmode="decimal" type="number" min="0" step="0.01" placeholder="2.00"></label>
         <label>Network<select name="usdtNetwork"><option value="ton">TON</option><option value="tron">Tron</option><option value="ethereum">Ethereum</option></select></label>
-        <label>Team jar / recipient address<input name="usdtRecipient" autocomplete="off" spellcheck="false" placeholder="Wallet address controlled by your group"></label>
-        <p class="fineprint">Creates a local payment request only. M2I never holds funds, stores spend authority, or initiates payment.</p>
+        <label>Team jar / recipient address<input name="usdtRecipient" autocomplete="off" spellcheck="false" placeholder="Wallet address agreed by the group"></label>
+        <p class="fineprint">Manual request only. M2I never holds funds, stores spend authority, pays automatically, or polls settlement.</p>
       </fieldset>
       <fieldset class="stake-box">
-        <legend>Optional sats / Lightning payment request</legend>
+        <legend>Optional sats / Lightning settlement request</legend>
         <label>Amount, sats<input name="satsAmount" inputmode="numeric" type="number" min="1" step="1" placeholder="2100"></label>
         <label>Lightning invoice, LNURL, or BTC address<input name="satsRecipient" autocomplete="off" spellcheck="false" placeholder="lnbc..., lightning:..., LNURL..., or bc1..."></label>
         <label>Payment URI, optional<input name="satsPaymentUri" autocomplete="off" spellcheck="false" placeholder="lightning:lnbc... or bitcoin:bc1..."></label>
-        <label>Manual instructions, optional<textarea name="satsInstructions" maxlength="800" rows="3" placeholder="Pay from your own wallet and report confirmation to the group."></textarea></label>
-        <p class="fineprint">Optional manual instructions only. No wallet connection, NWC, custody, auto-pay, or settlement polling.</p>
+        <label>Manual instructions, optional<textarea name="satsInstructions" maxlength="800" rows="3" placeholder="Pay from your own wallet after final settlement."></textarea></label>
       </fieldset>
-      <label>Note, optional<textarea name="note" maxlength="280" rows="3" placeholder="30min jog in the park"></textarea></label>
-      <button type="submit" class="primary">Start</button>
+      <button type="submit" class="primary">Create challenge</button>
     </form>
     <nav class="actions-row"><button class="secondary" data-action="history">History</button></nav>`);
+}
+
+function renderChallengeCard(challenge, history) {
+  const progress = computeChallengeProgress(challenge, history);
+  return `
+    <article class="challenge-card">
+      <div>
+        <h3>${escapeHtml(challenge.code)}</h3>
+        <p>${progress.validActiveDays} / ${challenge.requiredActiveDays} valid days · ${progress.daysRemaining} days left</p>
+        <p>${challenge.durationDays} days · ${challenge.minMinutesPerActiveDay} min active day${challenge.minDistanceKm ? ` · ${challenge.minDistanceKm} km min` : ''}</p>
+        <p>${challenge.participants.length || 'Open'} participant${challenge.participants.length === 1 ? '' : 's'} · ${challenge.paymentRequests?.length ? 'manual settlement request' : 'no payment request'}</p>
+      </div>
+      <button class="secondary" data-action="open-challenge" data-challenge-id="${escapeHtml(challenge.id)}">Open</button>
+    </article>`;
+}
+
+function renderChallengeScreen() {
+  const challenge = store.getChallenge(state.activeChallengeId);
+  if (!challenge) return renderHomeScreen();
+  const history = store.getHistory();
+  const progress = computeChallengeProgress(challenge, history);
+  const settlement = createChallengeSettlement({ challenge, history, progress });
+  const linked = history.filter((entry) => entry.challengeId === challenge.id || entry.claim?.challenge_id === challenge.id);
+  renderShell(`
+    <section class="panel stack">
+      <h2>${escapeHtml(challenge.code)}</h2>
+      <div class="progress-grid">
+        <div><strong>${progress.validActiveDays} / ${challenge.requiredActiveDays}</strong><span>valid days</span></div>
+        <div><strong>${progress.totalWorkouts}</strong><span>local workouts</span></div>
+        <div><strong>${progress.daysRemaining}</strong><span>days left</span></div>
+      </div>
+      <p class="muted">${challenge.durationDays} days. A valid active day needs at least ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` and ${challenge.minDistanceKm} km` : ''}. Progress is collected locally on this device.</p>
+      ${challenge.participants.length ? `<section class="roster"><p class="eyebrow">Participants</p>${challenge.participants.map((participant) => `<span>${escapeHtml(participant.displayName)}</span>`).join('')}</section>` : ''}
+      ${renderChallengePaymentSummary(challenge)}
+      <form class="stack" data-form="start-challenge-workout" data-challenge-id="${escapeHtml(challenge.id)}">
+        <label class="checkline privacy-check"><input type="checkbox" name="gpsEnabled" checked> Add local GPS aggregate distance</label>
+        <p class="fineprint">Enable Safari Location: While Using + Precise Location. No route is stored or uploaded; route points stay in memory and are discarded at finish.</p>
+        <label>Workout note, optional<textarea name="note" maxlength="280" rows="3" placeholder="Morning run"></textarea></label>
+        <button type="submit" class="primary">Start workout for this challenge</button>
+      </form>
+      <div class="actions-row">
+        <button class="secondary" data-action="copy-invite">Copy invite</button>
+        <button class="secondary" data-action="copy-challenge-settlement">Copy private settlement</button>
+      </div>
+      ${linked.length ? `<section class="stack"><h3>Local claims</h3>${linked.map((entry) => `<article class="history-item"><div><strong>${escapeHtml(entry.durationHuman)}</strong><span>${new Date(entry.stoppedAt).toLocaleString()}</span></div><span>${entry.claim.distance_km !== undefined ? `${entry.claim.distance_km.toFixed(3)} km` : 'duration only'}</span><button class="ghost" data-action="open-claim" data-claim-id="${escapeHtml(entry.id)}">Open</button></article>`).join('')}</section>` : '<p class="muted">No local workout claims yet.</p>'}
+      <textarea class="json-output" readonly rows="8">${escapeHtml(JSON.stringify(settlement, null, 2))}</textarea>
+      <button class="ghost" data-action="home">Back</button>
+    </section>`);
+}
+
+function renderChallengePaymentSummary(challenge) {
+  if (!challenge.paymentRequests?.length) return '<p class="fineprint">No payment request. You can use this challenge without stakes.</p>';
+  return `<section class="payment-card"><p class="eyebrow">Manual settlement request</p>${challenge.paymentRequests.map((request) => `<p>${request.asset === 'USDt' ? `${request.amount.toFixed(2)} USDt on ${request.network.toUpperCase()}` : `${request.amount_sats || 'Sats'} sats / ${request.network}`} · manual only</p>`).join('')}<p class="fineprint">Payment happens after final review from each user's own wallet. M2I does not pay, custody, or monitor settlement.</p></section>`;
 }
 
 function renderWorkoutScreen() {
@@ -439,8 +535,19 @@ app.addEventListener('submit', async (event) => {
       setState({ message: error.message });
     }
   }
-  if (form.matches('[data-form="challenge"]')) {
-    if (window.confirm('Ready? Tap OK to begin.')) await beginWorkout(form);
+  if (form.matches('[data-form="create-challenge"]')) {
+    try {
+      const challenge = createChallengeFromForm(form);
+      store.saveChallenge(challenge);
+      setState({ activeChallengeId: challenge.id, screen: 'challenge', message: 'Challenge created locally.' });
+    } catch (error) {
+      setState({ message: error.message });
+    }
+  }
+  if (form.matches('[data-form="start-challenge-workout"]')) {
+    const challenge = store.getChallenge(form.dataset.challengeId);
+    if (!challenge) return setState({ message: 'Challenge not found.' });
+    if (window.confirm('Start workout for this challenge?')) await beginWorkout(form, challenge);
   }
 });
 
@@ -496,6 +603,24 @@ app.addEventListener('click', async (event) => {
     } catch (error) {
       setState({ message: error.message });
     }
+  }
+  if (action === 'open-challenge') {
+    const id = event.target.closest('[data-action]')?.dataset.challengeId;
+    store.setActiveChallengeId(id);
+    setState({ activeChallengeId: id, screen: 'challenge', message: '' });
+  }
+  if (action === 'copy-invite') {
+    const challenge = store.getChallenge(state.activeChallengeId);
+    if (challenge) copy(createInviteText(challenge));
+  }
+  if (action === 'copy-challenge-settlement') {
+    const challenge = store.getChallenge(state.activeChallengeId);
+    if (challenge) copy(JSON.stringify(createChallengeSettlement({ challenge, history: store.getHistory() }), null, 2));
+  }
+  if (action === 'open-claim') {
+    const claimId = event.target.closest('[data-action]')?.dataset.claimId;
+    const entry = store.getHistory().find((item) => item.id === claimId);
+    setState({ lastSigned: entry, publishResults: entry?.published || [], screen: 'claim', message: '' });
   }
   if (action === 'history') setState({ screen: 'history', message: '' });
   if (action === 'home') setState({ screen: 'home', message: '' });

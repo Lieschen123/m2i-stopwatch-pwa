@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { verifyEvent } from 'nostr-tools/pure';
+import { createChallengePlan, computeChallengeProgress, createChallengeSettlement, parseParticipants } from '../src/challenge.js';
 import { createClaim, createHistoryEntry, createPublicClaimProjection } from '../src/claim.js';
 import { canonicalJson, sha256Hex } from '../src/crypto.js';
 import { createGpsTracker, distanceMeters } from '../src/gps.js';
@@ -19,6 +20,102 @@ function memoryStorage() {
 
 test('canonical JSON sorts object keys recursively', () => {
   assert.equal(canonicalJson({ b: 2, a: { d: 4, c: 3 } }), '{"a":{"c":3,"d":4},"b":2}');
+});
+
+test('creates multi-day group challenge plan with participants', () => {
+  const challenge = createChallengePlan({
+    code: 'June Run',
+    durationDays: '30',
+    requiredActiveDays: '10',
+    minMinutesPerActiveDay: '45',
+    minDistanceKm: '3.5',
+    participantsText: 'Nono\nAlex|npub1alex',
+    createdAt: 1718700000000
+  });
+
+  assert.match(challenge.id, /^challenge-june-run-/);
+  assert.equal(challenge.code, 'JUNE-RUN');
+  assert.equal(challenge.durationDays, 30);
+  assert.equal(challenge.requiredActiveDays, 10);
+  assert.equal(challenge.minMinutesPerActiveDay, 45);
+  assert.equal(challenge.minDistanceKm, 3.5);
+  assert.equal(challenge.participants.length, 2);
+  assert.equal(challenge.participants[1].npub, 'npub1alex');
+  assert.equal(challenge.endsAt, 1718700000000 + 30 * 24 * 60 * 60 * 1000);
+});
+
+test('parses comma and newline separated challenge participants', () => {
+  const participants = parseParticipants('Nono, Alex\nMia|npub1mia');
+  assert.deepEqual(participants.map((participant) => participant.displayName), ['Nono', 'Alex', 'Mia']);
+  assert.equal(participants[2].npub, 'npub1mia');
+});
+
+test('computes local challenge progress by valid active day', () => {
+  const challenge = createChallengePlan({
+    code: '30 day run',
+    durationDays: '30',
+    requiredActiveDays: '2',
+    minMinutesPerActiveDay: '45',
+    createdAt: 1718700000000
+  });
+  const validOne = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: 1718700000000,
+      stoppedAt: 1718700000000 + 46 * 60 * 1000,
+      claimantNpub: 'npub1m2itest'
+    }),
+    event: { id: 'valid-one' }
+  });
+  const tooShort = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: 1718786400000,
+      stoppedAt: 1718786400000 + 20 * 60 * 1000,
+      claimantNpub: 'npub1m2itest'
+    }),
+    event: { id: 'too-short' }
+  });
+  const validTwo = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: 1718872800000,
+      stoppedAt: 1718872800000 + 50 * 60 * 1000,
+      claimantNpub: 'npub1m2itest'
+    }),
+    event: { id: 'valid-two' }
+  });
+
+  const progress = computeChallengeProgress(challenge, [validOne, tooShort, validTwo], 1718872800000);
+  assert.equal(progress.totalWorkouts, 3);
+  assert.equal(progress.validWorkouts, 2);
+  assert.equal(progress.validActiveDays, 2);
+  assert.equal(progress.isComplete, true);
+});
+
+test('challenge settlement keeps manual payment requests private', () => {
+  const paymentRequest = createUsdtPaymentRequest({
+    amount: '2',
+    network: 'ton',
+    recipient: 'EQDteamjaraddress',
+    challengeCode: 'GROUP-RUN'
+  });
+  const challenge = createChallengePlan({
+    code: 'GROUP-RUN',
+    durationDays: '30',
+    requiredActiveDays: '10',
+    minMinutesPerActiveDay: '45',
+    paymentRequests: [paymentRequest],
+    createdAt: 1718700000000
+  });
+  const settlement = createChallengeSettlement({ challenge, history: [] });
+
+  assert.equal(settlement.settlement_model, 'manual-group-settlement');
+  assert.equal(settlement.paymentRequests[0].amount, 2);
+  assert.equal(settlement.payment_policy.includes('does not connect to wallets'), true);
 });
 
 test('claim hash is stable for equivalent input', () => {

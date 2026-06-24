@@ -1,4 +1,5 @@
 export function createWorkout({
+  challengeId,
   challengeCode,
   targetMinutes,
   counterpartNpub,
@@ -15,6 +16,7 @@ export function createWorkout({
 }) {
   const targetSeconds = Number(targetMinutes) > 0 ? Math.round(Number(targetMinutes) * 60) : null;
   return {
+    challengeId: challengeId || '',
     challengeCode,
     targetSeconds,
     counterpartNpub: counterpartNpub || '',

@@ -67,7 +67,46 @@ h2 { font-size: 1.35rem; line-height: 1.2; margin-bottom: 14px; }
 .ghost { background: transparent; color: #173c31; border: 1px solid #b9c6bf; }
 .danger { width: 100%; background: #a52828; color: #fff; margin-top: auto; }
 .danger-outline { background: #fff5f3; color: #932626; border: 1px solid #e0a19b; }
-.actions-row { display: flex; gap: 10px; margin-top: 16px; }
+.actions-row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.challenge-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid #c7d6d0;
+  border-radius: 8px;
+  padding: 14px;
+  background: #f6fbf8;
+}
+.challenge-card h3 { margin: 0 0 6px; }
+.challenge-card p { color: #5e6b66; line-height: 1.35; }
+.progress-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.progress-grid div {
+  border: 1px solid #c7d6d0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #eef5f1;
+}
+.progress-grid strong { display: block; font-size: 1.45rem; color: #0d6b57; }
+.progress-grid span { color: #64736e; font-size: 0.82rem; font-weight: 800; text-transform: uppercase; }
+.roster { display: flex; flex-wrap: wrap; gap: 8px; }
+.roster .eyebrow { width: 100%; }
+.roster span {
+  border: 1px solid #bdd2c9;
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: #fffdf8;
+  font-weight: 750;
+}
 .identity-strip {
   display: flex;
   justify-content: space-between;
@@ -190,6 +229,6 @@ h2 { font-size: 1.35rem; line-height: 1.2; margin-bottom: 14px; }
   h1 { font-size: 1.75rem; }
   .panel { padding: 16px; }
   .gps-details dl, .gps-claim dl { grid-template-columns: 1fr; }
-  .claim-summary, .history-item { grid-template-columns: 1fr; }
+  .form-grid, .challenge-card, .progress-grid, .claim-summary, .history-item { grid-template-columns: 1fr; }
   .timer { font-size: clamp(3.5rem, 19vw, 6rem); }
 }

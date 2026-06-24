@@ -2,7 +2,7 @@ import { CLIENT_NAME, SPEC_VERSION } from './constants.js';
 import { canonicalJson, sha256Hex } from './crypto.js';
 import { formatDuration } from './format.js';
 
-export function createClaim({ challengeCode, startedAt, stoppedAt, claimantNpub, counterpartNpub, note, gpsSummary }) {
+export function createClaim({ challengeId, challengeCode, startedAt, stoppedAt, claimantNpub, counterpartNpub, note, gpsSummary }) {
   const durationMs = Math.max(0, stoppedAt - startedAt);
   const durationSeconds = Math.floor(durationMs / 1000);
   const claim = {
@@ -16,6 +16,7 @@ export function createClaim({ challengeCode, startedAt, stoppedAt, claimantNpub,
     started_at: startedAt,
     stopped_at: stoppedAt
   };
+  if (challengeId) claim.challenge_id = challengeId;
   if (counterpartNpub) claim.counterpart_npub = counterpartNpub;
   if (note) claim.note = note;
   if (gpsSummary?.gps_used) {
@@ -80,6 +81,7 @@ export function createHistoryEntry({ claim, event, paymentRequest = null, paymen
   if (requests.length) privateSettlement.paymentRequests = requests;
   const entry = {
     id: event.id,
+    challengeId: claim.challenge_id || '',
     challengeCode: claim.challenge_code,
     durationHuman: claim.duration_human,
     durationSeconds: claim.duration_seconds,
