@@ -73,6 +73,11 @@ export function createPublicClaimProjection(claim) {
 
 export function createHistoryEntry({ claim, event, paymentRequest = null, paymentRequests = [], published = [] }) {
   const requests = paymentRequests.length ? paymentRequests : (paymentRequest ? [paymentRequest] : []);
+  const privateSettlement = {
+    settlement_model: 'manual-private-settlement',
+    signed_event: event
+  };
+  if (requests.length) privateSettlement.paymentRequests = requests;
   const entry = {
     id: event.id,
     challengeCode: claim.challenge_code,
@@ -81,6 +86,7 @@ export function createHistoryEntry({ claim, event, paymentRequest = null, paymen
     stoppedAt: claim.stopped_at,
     claim,
     event,
+    privateSettlement,
     published
   };
   if (requests.length) {

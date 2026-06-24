@@ -288,13 +288,14 @@ function renderWorkoutScreen() {
 
 function renderClaimScreen(entry) {
   if (!entry) return renderHomeScreen();
-  const json = JSON.stringify(entry.event, null, 2);
+  const settlement = entry.privateSettlement || { settlement_model: 'manual-private-settlement', signed_event: entry.event };
+  const json = JSON.stringify(settlement, null, 2);
   const distance = entry.claim.distance_km !== undefined ? `<span>${entry.claim.distance_km.toFixed(3)} km estimate</span>` : '';
   const gpsOutcome = renderClaimGpsOutcome(entry.claim);
   renderShell(`
     <section class="panel stack">
       <h2>Signed claim</h2>
-      <p class="muted">Private settlement claim. Share it directly with your challenge group or bot. Public Nostr sharing is separate and redacted.</p>
+      <p class="muted">Private settlement JSON. It includes your signed claim event and any local manual payment requests. Public Nostr sharing is separate and redacted.</p>
       <div class="claim-summary"><strong>${escapeHtml(entry.challengeCode)}</strong><span>${entry.durationHuman}</span>${distance}<span>Kind ${CLAIM_KIND}</span></div>
       ${gpsOutcome}
       <textarea class="json-output" readonly rows="10">${escapeHtml(json)}</textarea>
@@ -320,15 +321,23 @@ function renderPaymentRequests(entry) {
     const isSats = paymentRequest.asset === 'sats';
     const title = isSats
       ? `${paymentRequest.amount_sats ? `${paymentRequest.amount_sats} sats` : 'Sats'} manual request`
-      : `${paymentRequest.amount.toFixed(2)} USDt on ${escapeHtml(paymentRequest.network.toUpperCase())}`;
+      : `${paymentRequest.amount.toFixed(2)} USDt manual request`;
+    const rows = [
+      ['Asset', paymentRequest.asset],
+      ['Amount', isSats ? (paymentRequest.amount_sats ? `${paymentRequest.amount_sats} sats` : 'Sats amount not specified') : `${paymentRequest.amount.toFixed(2)} USDt`],
+      ['Network', paymentRequest.network ? paymentRequest.network.toUpperCase() : 'manual'],
+      ['Recipient', paymentRequest.recipient || 'See instructions'],
+      ['Payment URI', paymentRequest.payment_uri || 'None provided'],
+      ['Reference', paymentRequest.reference],
+      ['Instructions', paymentRequest.instruction],
+      ['Model', 'Manual request only. Not automatic payment.']
+    ];
     return `
     <section class="payment-card">
       <p class="eyebrow">${isSats ? 'Sats / Lightning payment request' : 'USDt payment request'}</p>
       <h3>${title}</h3>
       <dl>
-        <div><dt>Recipient</dt><dd>${escapeHtml(paymentRequest.recipient)}</dd></div>
-        <div><dt>Reference</dt><dd>${escapeHtml(paymentRequest.reference)}</dd></div>
-        <div><dt>Model</dt><dd>User-paid. No M2I custody.</dd></div>
+        ${rows.map(([term, value]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}
       </dl>
       <textarea class="json-output" readonly rows="5">${escapeHtml(paymentRequest.request_text)}</textarea>
       <button class="primary" data-action="copy-payment" data-payment-index="${index}">Copy payment request</button>
@@ -449,7 +458,10 @@ app.addEventListener('click', async (event) => {
     setState({ key: info, generatedNsec: '', screen: 'home', message: `You are ${shortNpub(info.npub)}.` });
   }
   if (action === 'finish' && window.confirm('Finish challenge? This will create your signed claim.')) await finishWorkout();
-  if (action === 'copy-event' && state.lastSigned) copy(JSON.stringify(state.lastSigned.event, null, 2));
+  if (action === 'copy-event' && state.lastSigned) {
+    const settlement = state.lastSigned.privateSettlement || { settlement_model: 'manual-private-settlement', signed_event: state.lastSigned.event };
+    copy(JSON.stringify(settlement, null, 2));
+  }
   if (action === 'copy-payment' && state.lastSigned) {
     const request = getPaymentRequests(state.lastSigned)[Number(event.target.dataset.paymentIndex || 0)];
     if (request) copy(request.request_text);

@@ -158,6 +158,10 @@ test('public claim projection redacts private fields', () => {
       claimHash: claim.claim_hash
     })
   ];
+  claim.privateSettlement = {
+    settlement_model: 'manual-private-settlement',
+    paymentRequests: claim.paymentRequests
+  };
   const publicClaim = createPublicClaimProjection(claim);
   assert.equal(publicClaim.distance_meters, 2100);
   assert.equal(publicClaim.distance_km, 2.1);
@@ -183,6 +187,7 @@ test('public claim projection redacts private fields', () => {
   assert.equal('amount' in publicClaim, false);
   assert.equal('asset' in publicClaim, false);
   assert.equal('paymentRequests' in publicClaim, false);
+  assert.equal('privateSettlement' in publicClaim, false);
   assert.equal('payment_uri' in publicClaim, false);
   assert.equal('amount_sats' in publicClaim, false);
 
@@ -275,7 +280,45 @@ test('history entry preserves local USDt payment request', () => {
 
   assert.equal(entry.id, 'event-id');
   assert.equal(entry.paymentRequest, paymentRequest);
+  assert.equal(entry.privateSettlement.settlement_model, 'manual-private-settlement');
+  assert.equal(entry.privateSettlement.signed_event.id, 'event-id');
+  assert.equal(entry.privateSettlement.paymentRequests[0], paymentRequest);
   assert.match(entry.paymentRequest.request_text, /Reference: USDT-HISTORY:/);
+});
+
+test('private settlement JSON retains visible 2 USDt manual request fields', () => {
+  const claim = createClaim({
+    challengeCode: 'USDT-2-VISIBLE',
+    startedAt: 1718708580000,
+    stoppedAt: 1718709480000,
+    claimantNpub: 'npub1m2itest'
+  });
+  const paymentRequest = createUsdtPaymentRequest({
+    amount: '2',
+    network: 'ton',
+    recipient: 'EQDvisibleteamjaraddress',
+    challengeCode: claim.challenge_code,
+    claimHash: claim.claim_hash
+  });
+  const entry = createHistoryEntry({
+    claim,
+    event: { id: 'event-id-2-usdt', kind: 30316, content: claim.canonical_json },
+    paymentRequests: [paymentRequest]
+  });
+  const settlementJson = JSON.stringify(entry.privateSettlement);
+
+  assert.equal(entry.paymentRequests[0].amount, 2);
+  assert.equal(entry.paymentRequests[0].asset, 'USDt');
+  assert.equal(entry.paymentRequests[0].network, 'ton');
+  assert.equal(entry.paymentRequests[0].recipient, 'EQDvisibleteamjaraddress');
+  assert.match(entry.paymentRequests[0].payment_uri, /^ton:/);
+  assert.match(entry.paymentRequests[0].request_text, /Pay 2\.00 USDt on TON/);
+  assert.match(entry.paymentRequests[0].request_text, /M2I does not custody funds or initiate this payment/);
+  assert.equal(entry.privateSettlement.paymentRequests[0].amount, 2);
+  assert.equal(settlementJson.includes('"amount":2'), true);
+  assert.equal(settlementJson.includes('"asset":"USDt"'), true);
+  assert.equal(settlementJson.includes('EQDvisibleteamjaraddress'), true);
+  assert.equal(settlementJson.includes('"signed_event"'), true);
 });
 
 test('creates manual sats payment request without wallet integration fields in claim', () => {
@@ -336,6 +379,9 @@ test('history entry preserves USDt and sats payment requests together', () => {
   assert.equal(entry.paymentRequests[0].asset, 'USDt');
   assert.equal(entry.paymentRequests[1].asset, 'sats');
   assert.equal(entry.paymentRequest, usdt);
+  assert.equal(entry.privateSettlement.paymentRequests.length, 2);
+  assert.equal(entry.privateSettlement.paymentRequests[0].amount, 5);
+  assert.equal(entry.privateSettlement.paymentRequests[1].amount_sats, 2100);
 });
 
 test('signs redacted public claim event', () => {
