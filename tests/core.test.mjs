@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { verifyEvent } from 'nostr-tools/pure';
-import { createChallengePlan, computeChallengeProgress, createChallengeSettlement, parseParticipants } from '../src/challenge.js';
+import { createChallengePlan, computeChallengeProgress, createChallengeSettlement, formatDateInput, parseParticipants } from '../src/challenge.js';
 import { createClaim, createHistoryEntry, createPublicClaimProjection } from '../src/claim.js';
 import { canonicalJson, sha256Hex } from '../src/crypto.js';
 import { createGpsTracker, distanceMeters } from '../src/gps.js';
@@ -30,6 +30,7 @@ test('creates multi-day group challenge plan with participants', () => {
     minMinutesPerActiveDay: '45',
     minDistanceKm: '3.5',
     participantsText: 'Nono\nAlex|npub1alex',
+    startDate: '2024-06-18',
     createdAt: 1718700000000
   });
 
@@ -41,7 +42,8 @@ test('creates multi-day group challenge plan with participants', () => {
   assert.equal(challenge.minDistanceKm, 3.5);
   assert.equal(challenge.participants.length, 2);
   assert.equal(challenge.participants[1].npub, 'npub1alex');
-  assert.equal(challenge.endsAt, 1718700000000 + 30 * 24 * 60 * 60 * 1000);
+  assert.equal(formatDateInput(challenge.startsAt), '2024-06-18');
+  assert.equal(challenge.endsAt, challenge.startsAt + 30 * 24 * 60 * 60 * 1000);
 });
 
 test('parses comma and newline separated challenge participants', () => {

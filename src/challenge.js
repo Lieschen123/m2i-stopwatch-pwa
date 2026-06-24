@@ -31,6 +31,7 @@ export function parseParticipants(input) {
 
 export function createChallengePlan({
   code,
+  startDate,
   durationDays,
   requiredActiveDays,
   minMinutesPerActiveDay,
@@ -45,6 +46,7 @@ export function createChallengePlan({
   const minMinutes = Math.max(1, Math.round(safeNumber(minMinutesPerActiveDay, 45)));
   const minKm = safeNumber(minDistanceKm, 0) > 0 ? Number(safeNumber(minDistanceKm).toFixed(3)) : null;
   const participants = parseParticipants(participantsText);
+  const startsAt = parseStartDate(startDate, createdAt);
   return {
     id: `challenge-${cleanCode.toLowerCase()}-${createdAt}`,
     code: cleanCode,
@@ -53,11 +55,31 @@ export function createChallengePlan({
     minMinutesPerActiveDay: minMinutes,
     minDistanceKm: minKm,
     createdAt,
-    startsAt: createdAt,
-    endsAt: createdAt + days * DAY_MS,
+    startsAt,
+    endsAt: startsAt + days * DAY_MS,
     participants,
     paymentRequests
   };
+}
+
+function parseStartDate(value, fallback) {
+  if (!value) return startOfLocalDay(fallback);
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isFinite(parsed.getTime()) ? parsed.getTime() : startOfLocalDay(fallback);
+}
+
+function startOfLocalDay(timestamp) {
+  const date = new Date(timestamp);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+export function formatDateInput(timestamp) {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export function workoutMeetsChallenge(workoutEntry, challenge) {

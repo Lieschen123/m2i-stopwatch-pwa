@@ -4,7 +4,7 @@ import { createClaim, createHistoryEntry, createPublicClaimProjection } from './
 import { formatDuration, shortNpub, clampText } from './format.js';
 import { generateNsec, keyInfoFromNsec, parseNpub, publishEvent, signClaimEvent, signPublicClaimEvent, createNip17DirectMessage } from './nostr.js';
 import { createSatsPaymentRequest, createUsdtPaymentRequest } from './payment.js';
-import { computeChallengeProgress, createChallengePlan, createChallengeSettlement, createInviteText } from './challenge.js';
+import { computeChallengeProgress, createChallengePlan, createChallengeSettlement, createInviteText, formatDateInput } from './challenge.js';
 import { createGpsTracker } from './gps.js';
 import { createStorage } from './storage.js';
 import { createWorkout, elapsedMs, requestWakeLock, targetDeltaSeconds } from './stopwatch.js';
@@ -108,6 +108,7 @@ function createChallengeFromForm(form) {
   ].filter(Boolean);
   return createChallengePlan({
     code,
+    startDate: data.get('startDate'),
     durationDays: data.get('durationDays'),
     requiredActiveDays: data.get('requiredActiveDays'),
     minMinutesPerActiveDay: data.get('minMinutesPerActiveDay'),
@@ -286,13 +287,14 @@ function renderHomeScreen() {
       <h2>Create Challenge</h2>
       <label>Challenge name/code<input name="challengeCode" required maxlength="80" placeholder="JUNE-RUN"></label>
       <div class="form-grid">
+        <label>Start date<input name="startDate" type="date" value="${formatDateInput(Date.now())}"></label>
         <label>Window, days<input name="durationDays" inputmode="numeric" type="number" min="1" step="1" value="30"></label>
-        <label>Required active days<input name="requiredActiveDays" inputmode="numeric" type="number" min="1" step="1" value="10"></label>
       </div>
       <div class="form-grid">
+        <label>Required active days<input name="requiredActiveDays" inputmode="numeric" type="number" min="1" step="1" value="10"></label>
         <label>Minimum minutes per active day<input name="minMinutesPerActiveDay" inputmode="numeric" type="number" min="1" step="1" value="45"></label>
-        <label>Optional minimum km<input name="minDistanceKm" inputmode="decimal" type="number" min="0" step="0.1" placeholder="off"></label>
       </div>
+      <label>Optional minimum km<input name="minDistanceKm" inputmode="decimal" type="number" min="0" step="0.1" placeholder="off"></label>
       <label>Group members, optional<textarea name="participantsText" maxlength="1200" rows="4" placeholder="Names only, one per line\nNono\nAlex\nMia"></textarea></label>
       <p class="fineprint">No emails. This roster stays local on this device. Share the invite in your existing group chat.</p>
       <fieldset class="stake-box">
@@ -321,7 +323,7 @@ function renderChallengeCard(challenge, history) {
       <div>
         <h3>${escapeHtml(challenge.code)}</h3>
         <p>${progress.validActiveDays} / ${challenge.requiredActiveDays} valid days · ${progress.daysRemaining} days left</p>
-        <p>${challenge.durationDays} days · ${challenge.minMinutesPerActiveDay} min active day${challenge.minDistanceKm ? ` · ${challenge.minDistanceKm} km min` : ''}</p>
+        <p>Starts ${new Date(challenge.startsAt).toLocaleDateString()} · ${challenge.durationDays} days · ${challenge.minMinutesPerActiveDay} min active day${challenge.minDistanceKm ? ` · ${challenge.minDistanceKm} km min` : ''}</p>
         <p>${challenge.participants.length || 'Open'} group member${challenge.participants.length === 1 ? '' : 's'} · ${challenge.paymentRequests?.length ? 'manual settlement request' : 'no payment request'}</p>
       </div>
       <button class="secondary" data-action="open-challenge" data-challenge-id="${escapeHtml(challenge.id)}">Open</button>
@@ -343,7 +345,7 @@ function renderChallengeScreen() {
         <div><strong>${progress.totalWorkouts}</strong><span>local workouts</span></div>
         <div><strong>${progress.daysRemaining}</strong><span>days left</span></div>
       </div>
-      <p class="muted">${challenge.durationDays} days. A valid active day needs at least ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` and ${challenge.minDistanceKm} km` : ''}. Progress is collected locally on this device.</p>
+      <p class="muted">Starts ${new Date(challenge.startsAt).toLocaleDateString()} and ends ${new Date(challenge.endsAt).toLocaleDateString()}. A valid active day needs at least ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` and ${challenge.minDistanceKm} km` : ''}. Progress is collected locally on this device.</p>
       ${challenge.participants.length ? `<section class="roster"><p class="eyebrow">Local group roster</p>${challenge.participants.map((participant) => `<span>${escapeHtml(participant.displayName)}</span>`).join('')}<p class="fineprint">Roster is local. Participants confirm in your group chat; final bot sync uses success/fail attestations only.</p></section>` : '<p class="fineprint">No roster yet. Share the invite in your group chat; M2I does not host chat or participant messages.</p>'}
       ${renderChallengePaymentSummary(challenge)}
       <form class="stack" data-form="start-challenge-workout" data-challenge-id="${escapeHtml(challenge.id)}">

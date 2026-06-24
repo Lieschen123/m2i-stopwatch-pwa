@@ -94,6 +94,7 @@ Actions:
 Fields:
 
 - Challenge name/code
+- Start date
 - Challenge duration in days
 - Required active days
 - Minimum minutes per active day
@@ -106,6 +107,7 @@ Fields:
 
 Show:
 
+- start and end date
 - rules
 - progress
 - participants

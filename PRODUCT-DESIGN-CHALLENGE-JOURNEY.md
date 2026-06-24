@@ -17,6 +17,7 @@ The user creates a challenge plan, not a single workout.
 Required fields:
 
 - Challenge name/code
+- Start date
 - Challenge window, for example 30 days
 - Commitment target, for example 10 active days
 - Minimum active-day duration, for example 45 minutes
@@ -31,7 +32,7 @@ Optional fields:
 
 Example:
 
-> 30-day challenge. Complete 10 active days. Each active day must be at least 45 minutes. Optional stake: 2 USDt to Teamkasse if commitment is missed.
+> Starts today. 30-day challenge. Complete 10 active days. Each active day must be at least 45 minutes. Optional stake: 2 USDt to Teamkasse if commitment is missed.
 
 ### 2. Invite / Join Group
 
