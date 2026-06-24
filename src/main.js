@@ -231,7 +231,7 @@ function renderShell(content) {
       <header class="topbar">
         <div>
           <p class="eyebrow">Move2Improve</p>
-          <h1>I Got This</h1>
+          <h1>I totally got this.</h1>
         </div>
         ${state.key ? `<button class="ghost" data-action="settings">Settings</button>` : ''}
       </header>
