@@ -50,6 +50,14 @@ npm run build
 
 Output goes to `dist/`. The production bundle is self-contained and static-hostable.
 
+For GitHub Pages at `https://lieschen123.github.io/m2i-stopwatch-pwa/`, build with the repository subpath:
+
+```bash
+npm run build:github-pages
+```
+
+This writes `dist/index.html`, `dist/manifest.webmanifest`, and service-worker registration paths for `/m2i-stopwatch-pwa/`.
+
 ## Test
 
 ```bash
@@ -81,6 +89,18 @@ For GitHub-based Pages deployment:
 - Build command: `npm run build`
 - Output directory: `dist`
 - Production branch: `main`
+
+## GitHub Pages Deploy
+
+Manual deployment for the likely repository Pages URL:
+
+```bash
+npm install
+npm run build:github-pages
+npx gh-pages -d dist
+```
+
+Or publish `dist/` from GitHub Actions after `npm run build:github-pages`. The required public base path is `/m2i-stopwatch-pwa/`.
 
 ## DNS For igotthis.move2improve.io
 

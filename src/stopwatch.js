@@ -7,6 +7,10 @@ export function createWorkout({
   usdtStakeAmount,
   usdtNetwork,
   usdtRecipient,
+  satsAmount,
+  satsRecipient,
+  satsPaymentUri,
+  satsInstructions,
   startedAt = Date.now()
 }) {
   const targetSeconds = Number(targetMinutes) > 0 ? Math.round(Number(targetMinutes) * 60) : null;
@@ -19,6 +23,10 @@ export function createWorkout({
     usdtStakeAmount: usdtStakeAmount || '',
     usdtNetwork: usdtNetwork || 'ton',
     usdtRecipient: usdtRecipient || '',
+    satsAmount: satsAmount || '',
+    satsRecipient: satsRecipient || '',
+    satsPaymentUri: satsPaymentUri || '',
+    satsInstructions: satsInstructions || '',
     startedAt
   };
 }

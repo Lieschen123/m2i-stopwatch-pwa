@@ -25,6 +25,15 @@ export function createGpsTracker({ geolocation = navigator.geolocation } = {}) {
   let rejectedSamples = 0;
   let accuracyTotal = 0;
   let lastError = '';
+  let watchStarted = false;
+
+  const secureContext = globalThis.isSecureContext === true;
+  const geolocationAvailable = typeof geolocation?.watchPosition === 'function';
+
+  function rejectSample(reason) {
+    rejectedSamples += 1;
+    lastError = reason;
+  }
 
   function acceptPosition(position) {
     const point = {
@@ -35,11 +44,11 @@ export function createGpsTracker({ geolocation = navigator.geolocation } = {}) {
     };
 
     if (!Number.isFinite(point.latitude) || !Number.isFinite(point.longitude)) {
-      rejectedSamples += 1;
+      rejectSample('GPS sample rejected: invalid coordinates.');
       return;
     }
     if (!Number.isFinite(point.accuracy) || point.accuracy > MAX_ACCURACY_M) {
-      rejectedSamples += 1;
+      rejectSample(`GPS sample rejected: accuracy ${Number.isFinite(point.accuracy) ? Math.round(point.accuracy) : 'unknown'}m.`);
       return;
     }
 
@@ -50,7 +59,8 @@ export function createGpsTracker({ geolocation = navigator.geolocation } = {}) {
       if (Number.isFinite(segmentMeters) && speed <= MAX_SEGMENT_SPEED_MPS) {
         totalMeters += segmentMeters;
       } else {
-        rejectedSamples += 1;
+        rejectSample(`GPS sample rejected: segment speed ${Number.isFinite(speed) ? speed.toFixed(1) : 'unknown'} m/s.`);
+        return;
       }
     }
 
@@ -59,26 +69,50 @@ export function createGpsTracker({ geolocation = navigator.geolocation } = {}) {
     accuracyTotal += point.accuracy;
   }
 
+  function status() {
+    const distanceMetersValue = Math.round(totalMeters);
+    return {
+      secure_context: secureContext,
+      geolocation_available: geolocationAvailable,
+      watch_started: watchStarted,
+      waiting_for_first_sample: watchStarted && acceptedSamples === 0 && !lastError,
+      distance_meters: distanceMetersValue,
+      distance_km: Number((distanceMetersValue / 1000).toFixed(3)),
+      gps_sample_count: acceptedSamples,
+      gps_rejected_sample_count: rejectedSamples,
+      gps_last_error: lastError
+    };
+  }
+
   return {
     start() {
-      if (!geolocation?.watchPosition || watchId !== null) return false;
-      watchId = geolocation.watchPosition(
-        acceptPosition,
-        (error) => { lastError = error?.message || 'Location unavailable.'; },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
-      );
+      if (!geolocationAvailable || watchId !== null) return false;
+      try {
+        watchId = geolocation.watchPosition(
+          acceptPosition,
+          (error) => { lastError = error?.message || 'Location unavailable.'; },
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+        );
+        watchStarted = true;
+      } catch (error) {
+        lastError = error?.message || 'Location unavailable.';
+        watchStarted = false;
+        return false;
+      }
       return true;
     },
     stop() {
       if (watchId !== null && geolocation?.clearWatch) geolocation.clearWatch(watchId);
       watchId = null;
+      watchStarted = false;
       lastPoint = null;
     },
+    status,
     summary() {
-      const distanceMetersValue = Math.round(totalMeters);
+      const currentStatus = status();
       return {
-        distance_meters: distanceMetersValue,
-        distance_km: Number((distanceMetersValue / 1000).toFixed(3)),
+        distance_meters: currentStatus.distance_meters,
+        distance_km: currentStatus.distance_km,
         gps_used: true,
         gps_points_discarded: true,
         gps_accuracy_summary: acceptedSamples > 0
@@ -86,6 +120,9 @@ export function createGpsTracker({ geolocation = navigator.geolocation } = {}) {
           : `no accepted samples, rejected ${rejectedSamples}`,
         gps_sample_count: acceptedSamples,
         gps_rejected_sample_count: rejectedSamples,
+        gps_secure_context: secureContext,
+        gps_geolocation_available: geolocationAvailable,
+        gps_no_accepted_samples: acceptedSamples === 0,
         verification_method: 'pwa-gps-aggregate-v1',
         gps_last_error: lastError
       };

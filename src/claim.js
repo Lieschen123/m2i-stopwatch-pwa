@@ -19,15 +19,20 @@ export function createClaim({ challengeCode, startedAt, stoppedAt, claimantNpub,
   if (counterpartNpub) claim.counterpart_npub = counterpartNpub;
   if (note) claim.note = note;
   if (gpsSummary?.gps_used) {
-    claim.distance_meters = gpsSummary.distance_meters;
-    claim.distance_km = gpsSummary.distance_km;
     claim.gps_used = true;
     claim.gps_points_discarded = gpsSummary.gps_points_discarded === true;
     claim.gps_accuracy_summary = gpsSummary.gps_accuracy_summary;
     claim.gps_sample_count = gpsSummary.gps_sample_count;
     claim.gps_rejected_sample_count = gpsSummary.gps_rejected_sample_count;
-    claim.local_verification = 'movement-aggregate-v1';
-    claim.verification_method = gpsSummary.verification_method;
+    claim.gps_no_accepted_samples = gpsSummary.gps_no_accepted_samples === true || gpsSummary.gps_sample_count === 0;
+    if (gpsSummary.gps_secure_context !== undefined) claim.gps_secure_context = gpsSummary.gps_secure_context === true;
+    if (gpsSummary.gps_geolocation_available !== undefined) claim.gps_geolocation_available = gpsSummary.gps_geolocation_available === true;
+    if (gpsSummary.gps_sample_count > 0) {
+      claim.distance_meters = gpsSummary.distance_meters;
+      claim.distance_km = gpsSummary.distance_km;
+      claim.local_verification = 'movement-aggregate-v1';
+      claim.verification_method = gpsSummary.verification_method;
+    }
     if (gpsSummary.gps_last_error) claim.gps_last_error = gpsSummary.gps_last_error;
   }
 
@@ -61,8 +66,9 @@ export function createPublicClaimProjection(claim) {
   };
 }
 
-export function createHistoryEntry({ claim, event, published = [] }) {
-  return {
+export function createHistoryEntry({ claim, event, paymentRequest = null, paymentRequests = [], published = [] }) {
+  const requests = paymentRequests.length ? paymentRequests : (paymentRequest ? [paymentRequest] : []);
+  const entry = {
     id: event.id,
     challengeCode: claim.challenge_code,
     durationHuman: claim.duration_human,
@@ -72,4 +78,9 @@ export function createHistoryEntry({ claim, event, published = [] }) {
     event,
     published
   };
+  if (requests.length) {
+    entry.paymentRequests = requests;
+    entry.paymentRequest = requests[0];
+  }
+  return entry;
 }

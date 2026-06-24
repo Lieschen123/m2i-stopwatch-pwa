@@ -113,6 +113,39 @@ h2 { font-size: 1.35rem; line-height: 1.2; margin-bottom: 14px; }
 }
 .target { min-height: 28px; color: #40524d; font-size: 1.05rem; font-weight: 700; }
 .distance { color: #0d6b57; }
+.gps-details, .gps-claim {
+  border: 1px solid #c7d6d0;
+  border-radius: 8px;
+  background: #f6fbf8;
+  color: #263a36;
+  padding: 12px;
+  text-align: left;
+}
+.gps-details dl, .gps-claim dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0;
+}
+.gps-details dt, .gps-claim dt {
+  color: #64736e;
+  font-size: 0.74rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+.gps-details dd, .gps-claim dd {
+  margin: 2px 0 0;
+  font-size: 0.92rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+.gps-claim { display: grid; gap: 10px; }
+.gps-claim p { font-weight: 800; }
+.gps-claim-warning {
+  border-color: #e0a19b;
+  background: #fff5f3;
+  color: #6f251e;
+}
 .claim-summary {
   display: grid;
   grid-template-columns: 1fr auto auto;
@@ -156,6 +189,7 @@ h2 { font-size: 1.35rem; line-height: 1.2; margin-bottom: 14px; }
   .topbar { align-items: flex-start; }
   h1 { font-size: 1.75rem; }
   .panel { padding: 16px; }
+  .gps-details dl, .gps-claim dl { grid-template-columns: 1fr; }
   .claim-summary, .history-item { grid-template-columns: 1fr; }
   .timer { font-size: clamp(3.5rem, 19vw, 6rem); }
 }

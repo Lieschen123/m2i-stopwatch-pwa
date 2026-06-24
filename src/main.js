@@ -3,7 +3,7 @@ import { CLAIM_KIND, DEFAULT_RELAYS } from './constants.js';
 import { createClaim, createHistoryEntry, createPublicClaimProjection } from './claim.js';
 import { formatDuration, shortNpub, clampText } from './format.js';
 import { generateNsec, keyInfoFromNsec, parseNpub, publishEvent, signClaimEvent, signPublicClaimEvent, createNip17DirectMessage } from './nostr.js';
-import { createUsdtPaymentRequest } from './payment.js';
+import { createSatsPaymentRequest, createUsdtPaymentRequest } from './payment.js';
 import { createGpsTracker } from './gps.js';
 import { createStorage } from './storage.js';
 import { createWorkout, elapsedMs, requestWakeLock, targetDeltaSeconds } from './stopwatch.js';
@@ -46,7 +46,7 @@ function boot() {
   state.screen = state.key ? (state.activeWorkout ? 'workout' : 'home') : 'key';
   render();
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+    window.addEventListener('load', () => navigator.serviceWorker.register(new URL('../sw.js', import.meta.url)).catch(() => {}));
   }
 }
 
@@ -68,6 +68,7 @@ function updateWorkoutClock() {
   const node = document.querySelector('[data-elapsed]');
   const target = document.querySelector('[data-target-status]');
   const distance = document.querySelector('[data-distance-status]');
+  const gpsDetails = document.querySelector('[data-gps-details]');
   if (!node || !state.activeWorkout) return;
   const now = Date.now();
   node.textContent = formatDuration(elapsedMs(state.activeWorkout, now));
@@ -78,8 +79,9 @@ function updateWorkoutClock() {
     else target.textContent = `${formatDuration(Math.abs(delta) * 1000)} to target`;
   }
   if (distance && state.gpsTracker) {
-    const summary = state.gpsTracker.summary();
-    distance.textContent = `${summary.distance_km.toFixed(3)} km local estimate`;
+    const status = state.gpsTracker.status();
+    distance.textContent = renderGpsDistanceText(status);
+    if (gpsDetails) gpsDetails.innerHTML = renderGpsDiagnostics(status);
   }
 }
 
@@ -99,7 +101,11 @@ async function beginWorkout(form) {
     gpsEnabled: data.get('gpsEnabled') === 'on',
     usdtStakeAmount: clampText(data.get('usdtStakeAmount'), 24),
     usdtNetwork: clampText(data.get('usdtNetwork'), 24),
-    usdtRecipient: clampText(data.get('usdtRecipient'), 220)
+    usdtRecipient: clampText(data.get('usdtRecipient'), 220),
+    satsAmount: clampText(data.get('satsAmount'), 24),
+    satsRecipient: clampText(data.get('satsRecipient'), 320),
+    satsPaymentUri: clampText(data.get('satsPaymentUri'), 520),
+    satsInstructions: clampText(data.get('satsInstructions'), 800)
   });
   store.setActiveWorkout(workout);
   const wakeLock = await requestWakeLock();
@@ -107,9 +113,11 @@ async function beginWorkout(form) {
   let message = '';
   if (workout.gpsEnabled) {
     gpsTracker = createGpsTracker();
-    message = gpsTracker.start()
-      ? 'GPS aggregate enabled. Route points stay in memory and are discarded at finish.'
-      : 'GPS is unavailable in this browser. Continuing stopwatch-only.';
+    const started = gpsTracker.start();
+    const status = gpsTracker.status();
+    message = started
+      ? 'GPS watch requested. Waiting for the first accepted sample; route points stay in memory and are discarded at finish.'
+      : `GPS did not start: ${gpsStartBlocker(status)} Continuing stopwatch-only.`;
   }
   setState({ activeWorkout: workout, wakeLock, gpsTracker, gpsSummary: null, screen: 'workout', message });
   startTimer();
@@ -140,14 +148,24 @@ async function finishWorkout() {
     counterpartNpub: state.activeWorkout.counterpartNpub,
     nsec: store.getSecret()
   });
-  const paymentRequest = createUsdtPaymentRequest({
+  const paymentRequests = [
+    createUsdtPaymentRequest({
     amount: state.activeWorkout.usdtStakeAmount,
     recipient: state.activeWorkout.usdtRecipient,
     network: state.activeWorkout.usdtNetwork,
     challengeCode: state.activeWorkout.challengeCode,
     claimHash: claim.claim_hash
-  });
-  const entry = createHistoryEntry({ claim, event, paymentRequest });
+    }),
+    createSatsPaymentRequest({
+      amountSats: state.activeWorkout.satsAmount,
+      recipient: state.activeWorkout.satsRecipient,
+      paymentUri: state.activeWorkout.satsPaymentUri,
+      instructions: state.activeWorkout.satsInstructions,
+      challengeCode: state.activeWorkout.challengeCode,
+      claimHash: claim.claim_hash
+    })
+  ].filter(Boolean);
+  const entry = createHistoryEntry({ claim, event, paymentRequests });
   store.addHistory(entry);
   store.clearActiveWorkout();
   if (state.wakeLock) await state.wakeLock.release().catch(() => {});
@@ -232,11 +250,19 @@ function renderHomeScreen() {
       <label class="checkline privacy-check"><input type="checkbox" name="gpsEnabled"> Add local GPS aggregate distance</label>
       <p class="fineprint">Optional. Route points stay in memory during this workout and are discarded at finish. This is local movement verification, not GPS proof.</p>
       <fieldset class="stake-box">
-        <legend>Optional USDt stake request</legend>
+        <legend>Optional USDt payment request</legend>
         <label>Amount<input name="usdtStakeAmount" inputmode="decimal" type="number" min="0" step="0.01" placeholder="5.00"></label>
         <label>Network<select name="usdtNetwork"><option value="ton">TON</option><option value="tron">Tron</option><option value="ethereum">Ethereum</option></select></label>
         <label>Team jar / recipient address<input name="usdtRecipient" autocomplete="off" spellcheck="false" placeholder="Wallet address controlled by your group"></label>
         <p class="fineprint">Creates a local payment request only. M2I never holds funds, stores spend authority, or initiates payment.</p>
+      </fieldset>
+      <fieldset class="stake-box">
+        <legend>Optional sats / Lightning payment request</legend>
+        <label>Amount, sats<input name="satsAmount" inputmode="numeric" type="number" min="1" step="1" placeholder="2100"></label>
+        <label>Lightning invoice, LNURL, or BTC address<input name="satsRecipient" autocomplete="off" spellcheck="false" placeholder="lnbc..., lightning:..., LNURL..., or bc1..."></label>
+        <label>Payment URI, optional<input name="satsPaymentUri" autocomplete="off" spellcheck="false" placeholder="lightning:lnbc... or bitcoin:bc1..."></label>
+        <label>Manual instructions, optional<textarea name="satsInstructions" maxlength="800" rows="3" placeholder="Pay from your own wallet and report confirmation to the group."></textarea></label>
+        <p class="fineprint">Optional manual instructions only. No wallet connection, NWC, custody, auto-pay, or settlement polling.</p>
       </fieldset>
       <label>Note, optional<textarea name="note" maxlength="280" rows="3" placeholder="30min jog in the park"></textarea></label>
       <button type="submit" class="primary">Start</button>
@@ -250,7 +276,10 @@ function renderWorkoutScreen() {
       <p class="eyebrow">${escapeHtml(state.activeWorkout.challengeCode)}</p>
       <div class="timer" data-elapsed>${formatDuration(elapsedMs(state.activeWorkout))}</div>
       <div class="target" data-target-status></div>
-      ${state.activeWorkout.gpsEnabled ? '<div class="target distance" data-distance-status>Waiting for local GPS estimate...</div>' : ''}
+      ${state.activeWorkout.gpsEnabled ? `
+        <div class="target distance" data-distance-status>Waiting for local GPS estimate...</div>
+        <div class="gps-details" data-gps-details></div>
+      ` : ''}
       <button class="danger" data-action="finish">Finish challenge</button>
     </section>`);
   startTimer();
@@ -261,38 +290,52 @@ function renderClaimScreen(entry) {
   if (!entry) return renderHomeScreen();
   const json = JSON.stringify(entry.event, null, 2);
   const distance = entry.claim.distance_km !== undefined ? `<span>${entry.claim.distance_km.toFixed(3)} km estimate</span>` : '';
+  const gpsOutcome = renderClaimGpsOutcome(entry.claim);
   renderShell(`
     <section class="panel stack">
       <h2>Signed claim</h2>
       <p class="muted">Private settlement claim. Share it directly with your challenge group or bot. Public Nostr sharing is separate and redacted.</p>
       <div class="claim-summary"><strong>${escapeHtml(entry.challengeCode)}</strong><span>${entry.durationHuman}</span>${distance}<span>Kind ${CLAIM_KIND}</span></div>
+      ${gpsOutcome}
       <textarea class="json-output" readonly rows="10">${escapeHtml(json)}</textarea>
       <button class="primary" data-action="copy-event">Copy private settlement JSON</button>
       ${entry.claim.counterpart_npub ? `<button class="secondary" data-action="dm">Send NIP-17 DM</button>` : ''}
       <button class="secondary" data-action="public-share">Public share to Nostr</button>
       <p class="fineprint">Public share creates a separate redacted event. It excludes route, payment, counterpart, stake, and private note data.</p>
-      ${renderPaymentRequest(entry.paymentRequest)}
+      ${renderPaymentRequests(entry)}
       <button class="ghost" data-action="home">Done</button>
       ${renderPublishResults()}
     </section>`);
 }
 
-function renderPaymentRequest(paymentRequest) {
-  if (!paymentRequest) return '';
-  return `
+function getPaymentRequests(entry) {
+  if (Array.isArray(entry?.paymentRequests)) return entry.paymentRequests;
+  return entry?.paymentRequest ? [entry.paymentRequest] : [];
+}
+
+function renderPaymentRequests(entry) {
+  const paymentRequests = getPaymentRequests(entry);
+  if (!paymentRequests.length) return '';
+  return paymentRequests.map((paymentRequest, index) => {
+    const isSats = paymentRequest.asset === 'sats';
+    const title = isSats
+      ? `${paymentRequest.amount_sats ? `${paymentRequest.amount_sats} sats` : 'Sats'} manual request`
+      : `${paymentRequest.amount.toFixed(2)} USDt on ${escapeHtml(paymentRequest.network.toUpperCase())}`;
+    return `
     <section class="payment-card">
-      <p class="eyebrow">USDt stake request</p>
-      <h3>${paymentRequest.amount.toFixed(2)} USDt on ${escapeHtml(paymentRequest.network.toUpperCase())}</h3>
+      <p class="eyebrow">${isSats ? 'Sats / Lightning payment request' : 'USDt payment request'}</p>
+      <h3>${title}</h3>
       <dl>
         <div><dt>Recipient</dt><dd>${escapeHtml(paymentRequest.recipient)}</dd></div>
         <div><dt>Reference</dt><dd>${escapeHtml(paymentRequest.reference)}</dd></div>
         <div><dt>Model</dt><dd>User-paid. No M2I custody.</dd></div>
       </dl>
       <textarea class="json-output" readonly rows="5">${escapeHtml(paymentRequest.request_text)}</textarea>
-      <button class="primary" data-action="copy-payment">Copy payment request</button>
-      <button class="secondary" data-action="copy-payment-uri">Copy wallet URI</button>
-      <p class="fineprint">Your wallet executes the payment. M2I only records reported or confirmed payment status later.</p>
+      <button class="primary" data-action="copy-payment" data-payment-index="${index}">Copy payment request</button>
+      ${paymentRequest.payment_uri ? `<button class="secondary" data-action="copy-payment-uri" data-payment-index="${index}">Copy wallet URI</button>` : ''}
+      <p class="fineprint">Your wallet executes the payment. M2I does not connect to wallets, initiate payment, custody funds, or poll for settlement.</p>
     </section>`;
+  }).join('');
 }
 
 function renderHistoryScreen() {
@@ -326,6 +369,47 @@ function renderSettingsScreen() {
 function renderPublishResults() {
   if (!state.publishResults.length) return '';
   return `<ul class="results">${state.publishResults.map((result) => `<li class="${result.ok ? 'ok' : 'bad'}">${escapeHtml(result.relay)}: ${result.ok ? 'sent' : escapeHtml(result.error)}</li>`).join('')}</ul>`;
+}
+
+function gpsStartBlocker(status) {
+  if (!status.secure_context) return 'this page is not in a secure context';
+  if (!status.geolocation_available) return 'geolocation is unavailable';
+  return status.gps_last_error || 'the browser rejected the location watch';
+}
+
+function renderGpsDistanceText(status) {
+  if (!status.watch_started) return 'GPS watch not running.';
+  if (status.waiting_for_first_sample) return 'Waiting for first accepted GPS sample...';
+  if (status.gps_sample_count === 0) return 'No accepted GPS samples yet.';
+  return `${status.distance_km.toFixed(3)} km local estimate`;
+}
+
+function renderGpsDiagnostics(status) {
+  const fields = [
+    ['Secure context', status.secure_context ? 'yes' : 'no'],
+    ['Geolocation', status.geolocation_available ? 'available' : 'unavailable'],
+    ['Watch', status.watch_started ? 'running' : 'not running'],
+    ['Accepted', status.gps_sample_count],
+    ['Rejected', status.gps_rejected_sample_count],
+    ['Last error', status.gps_last_error || 'none']
+  ];
+  return `<dl>${fields.map(([term, value]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>`;
+}
+
+function renderClaimGpsOutcome(claim) {
+  if (!claim?.gps_used) return '';
+  const noSamples = claim.gps_sample_count === 0;
+  const rows = [
+    ['Accepted', claim.gps_sample_count],
+    ['Rejected', claim.gps_rejected_sample_count],
+    ['Summary', claim.gps_accuracy_summary],
+    ['Last error', claim.gps_last_error || 'none']
+  ];
+  return `
+    <section class="gps-claim ${noSamples ? 'gps-claim-warning' : ''}">
+      <p>${noSamples ? 'GPS produced no accepted samples for this claim.' : 'GPS aggregate included in this claim.'}</p>
+      <dl>${rows.map(([term, value]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>
+    </section>`;
 }
 
 function escapeHtml(value) {
@@ -366,8 +450,14 @@ app.addEventListener('click', async (event) => {
   }
   if (action === 'finish' && window.confirm('Finish challenge? This will create your signed claim.')) await finishWorkout();
   if (action === 'copy-event' && state.lastSigned) copy(JSON.stringify(state.lastSigned.event, null, 2));
-  if (action === 'copy-payment' && state.lastSigned?.paymentRequest) copy(state.lastSigned.paymentRequest.request_text);
-  if (action === 'copy-payment-uri' && state.lastSigned?.paymentRequest) copy(state.lastSigned.paymentRequest.payment_uri);
+  if (action === 'copy-payment' && state.lastSigned) {
+    const request = getPaymentRequests(state.lastSigned)[Number(event.target.dataset.paymentIndex || 0)];
+    if (request) copy(request.request_text);
+  }
+  if (action === 'copy-payment-uri' && state.lastSigned) {
+    const request = getPaymentRequests(state.lastSigned)[Number(event.target.dataset.paymentIndex || 0)];
+    if (request?.payment_uri) copy(request.payment_uri);
+  }
   if (action === 'public-share' && state.lastSigned) {
     const ok = window.confirm('Public Nostr sharing is permanent and linkable to this key. It will include only redacted aggregate data, never route, payment, or counterpart details. Continue?');
     if (!ok) return;
