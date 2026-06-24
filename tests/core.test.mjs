@@ -141,19 +141,59 @@ test('public claim projection redacts private fields', () => {
       verification_method: 'pwa-gps-aggregate-v1'
     }
   });
+  claim.paymentRequests = [
+    createUsdtPaymentRequest({
+      amount: '5',
+      network: 'ton',
+      recipient: 'EQDteamjaraddress',
+      challengeCode: claim.challenge_code,
+      claimHash: claim.claim_hash
+    }),
+    createSatsPaymentRequest({
+      amountSats: '2100',
+      recipient: 'lnbc2100n1ptestinvoice',
+      paymentUri: 'lightning:lnbc2100n1ptestinvoice',
+      instructions: 'Pay from your own Lightning wallet.',
+      challengeCode: claim.challenge_code,
+      claimHash: claim.claim_hash
+    })
+  ];
   const publicClaim = createPublicClaimProjection(claim);
   assert.equal(publicClaim.distance_meters, 2100);
+  assert.equal(publicClaim.distance_km, 2.1);
   assert.equal(publicClaim.duration_seconds, 900);
+  assert.equal(publicClaim.gps_used, true);
+  assert.equal(publicClaim.gps_summary, 'movement aggregate included');
+  assert.equal(publicClaim.local_verification, 'movement-aggregate-v1');
+  assert.equal(publicClaim.verification_method, 'pwa-gps-aggregate-v1');
   assert.equal('claimant_npub' in publicClaim, false);
   assert.equal('counterpart_npub' in publicClaim, false);
   assert.equal('note' in publicClaim, false);
+  assert.equal('started_at' in publicClaim, false);
+  assert.equal('stopped_at' in publicClaim, false);
+  assert.equal('created_at' in publicClaim, false);
+  assert.equal('duration_ms' in publicClaim, false);
   assert.equal('gps_accuracy_summary' in publicClaim, false);
   assert.equal('gps_sample_count' in publicClaim, false);
+  assert.equal('gps_rejected_sample_count' in publicClaim, false);
+  assert.equal('gps_last_error' in publicClaim, false);
+  assert.equal('gps_points_discarded' in publicClaim, false);
+  assert.equal('gps_no_accepted_samples' in publicClaim, false);
   assert.equal('recipient' in publicClaim, false);
   assert.equal('amount' in publicClaim, false);
+  assert.equal('asset' in publicClaim, false);
   assert.equal('paymentRequests' in publicClaim, false);
   assert.equal('payment_uri' in publicClaim, false);
   assert.equal('amount_sats' in publicClaim, false);
+
+  assert.equal(publicClaim.canonical_json.includes('1718708580000'), false);
+  assert.equal(publicClaim.canonical_json.includes('1718709480000'), false);
+  assert.equal(publicClaim.canonical_json.includes('accepted 8'), false);
+  assert.equal(publicClaim.canonical_json.includes('rejected 1'), false);
+  assert.equal(publicClaim.canonical_json.includes('EQDteamjaraddress'), false);
+  assert.equal(publicClaim.canonical_json.includes('USDt'), false);
+  assert.equal(publicClaim.canonical_json.includes('lnbc2100n1ptestinvoice'), false);
+  assert.equal(publicClaim.canonical_json.includes('lightning:'), false);
 });
 
 test('public claim projection omits GPS distance when no samples were accepted', () => {
@@ -180,6 +220,14 @@ test('public claim projection omits GPS distance when no samples were accepted',
   assert.equal('distance_meters' in publicClaim, false);
   assert.equal('distance_km' in publicClaim, false);
   assert.equal('verification_method' in publicClaim, false);
+  assert.equal('gps_summary' in publicClaim, false);
+  assert.equal(publicClaim.gps_used, true);
+  assert.equal('gps_last_error' in publicClaim, false);
+  assert.equal('gps_sample_count' in publicClaim, false);
+  assert.equal('gps_rejected_sample_count' in publicClaim, false);
+  assert.equal('gps_accuracy_summary' in publicClaim, false);
+  assert.equal(publicClaim.canonical_json.includes('no accepted samples'), false);
+  assert.equal(publicClaim.canonical_json.includes('rejected'), false);
 });
 
 test('creates user-paid USDt payment request without custody fields in claim', () => {

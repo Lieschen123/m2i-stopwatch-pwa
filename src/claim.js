@@ -53,9 +53,14 @@ export function createPublicClaimProjection(claim) {
     public_note: 'Local movement verification with signed aggregate claim. No route, payment, or counterpart data included.',
     spec_version: claim.spec_version
   };
+  if (claim.gps_used) {
+    publicClaim.gps_used = true;
+  }
   if (claim.distance_meters !== undefined) {
     publicClaim.distance_meters = claim.distance_meters;
     publicClaim.distance_km = claim.distance_km;
+    publicClaim.gps_summary = 'movement aggregate included';
+    publicClaim.local_verification = claim.local_verification;
     publicClaim.verification_method = claim.verification_method;
   }
   const serialized = canonicalJson(publicClaim);
