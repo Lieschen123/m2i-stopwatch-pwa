@@ -2,11 +2,17 @@
   "name": "Move2Improve Stopwatch",
   "short_name": "M2I Stopwatch",
   "description": "Stopwatch PWA for locally signed Nostr workout claims.",
-  "start_url": "/",
+  "start_url": "/m2i-stopwatch-pwa/",
   "display": "standalone",
   "background_color": "#f4f0e8",
   "theme_color": "#113c37",
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
-  ]
+    {
+      "src": "/m2i-stopwatch-pwa/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "scope": "/m2i-stopwatch-pwa/"
 }
