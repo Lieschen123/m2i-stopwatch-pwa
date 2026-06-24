@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { verifyEvent } from 'nostr-tools/pure';
-import { createChallengePlan, computeChallengeProgress, createChallengeSettlement, formatDateInput, parseParticipants } from '../src/challenge.js';
+import { createChallengeInviteUrl, createChallengePlan, computeChallengeProgress, createChallengeSettlement, decodeChallengeInvite, formatDateInput, parseParticipants } from '../src/challenge.js';
 import { createClaim, createHistoryEntry, createPublicClaimProjection } from '../src/claim.js';
 import { canonicalJson, sha256Hex } from '../src/crypto.js';
 import { createGpsTracker, distanceMeters } from '../src/gps.js';
@@ -52,9 +52,33 @@ test('parses comma and newline separated challenge participants', () => {
   assert.equal(participants[2].npub, 'npub1mia');
 });
 
+test('creates clickable challenge invite URL that can be imported locally', () => {
+  const challenge = createChallengePlan({
+    code: 'FLOW TEST',
+    startDate: '2026-06-24',
+    durationDays: '1',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '2',
+    participantsText: 'Nono\nAlex',
+    paymentRequests: [createUsdtPaymentRequest({ amount: '2', network: 'ton', recipient: 'EQDteamjar', challengeCode: 'FLOW TEST' })],
+    createdAt: 1782290000000
+  });
+  const url = createChallengeInviteUrl(challenge, 'https://lieschen123.github.io/m2i-stopwatch-pwa/');
+  const parsed = new URL(url);
+  const token = new URLSearchParams(parsed.hash.slice(1)).get('challenge');
+  const imported = decodeChallengeInvite(token);
+
+  assert.equal(parsed.origin, 'https://lieschen123.github.io');
+  assert.equal(imported.id, challenge.id);
+  assert.equal(imported.code, 'FLOW-TEST');
+  assert.equal(imported.participants.length, 2);
+  assert.equal(imported.paymentRequests[0].amount, 2);
+});
+
 test('computes local challenge progress by valid active day', () => {
   const challenge = createChallengePlan({
     code: '30 day run',
+    startDate: '2024-06-18',
     durationDays: '30',
     requiredActiveDays: '2',
     minMinutesPerActiveDay: '45',
@@ -96,6 +120,52 @@ test('computes local challenge progress by valid active day', () => {
   assert.equal(progress.validWorkouts, 2);
   assert.equal(progress.validActiveDays, 2);
   assert.equal(progress.isComplete, true);
+});
+
+test('does not count workouts outside the challenge date window', () => {
+  const challenge = createChallengePlan({
+    code: 'window test',
+    startDate: '2024-06-18',
+    durationDays: '1',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '1',
+    createdAt: 1718700000000
+  });
+  const beforeWindow = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: challenge.startsAt - 10 * 60 * 1000,
+      stoppedAt: challenge.startsAt - 5 * 60 * 1000,
+      claimantNpub: 'npub1m2itest'
+    }),
+    event: { id: 'before-window' }
+  });
+  const insideWindow = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: challenge.startsAt + 5 * 60 * 1000,
+      stoppedAt: challenge.startsAt + 7 * 60 * 1000,
+      claimantNpub: 'npub1m2itest'
+    }),
+    event: { id: 'inside-window' }
+  });
+  const afterWindow = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: challenge.endsAt + 5 * 60 * 1000,
+      stoppedAt: challenge.endsAt + 7 * 60 * 1000,
+      claimantNpub: 'npub1m2itest'
+    }),
+    event: { id: 'after-window' }
+  });
+
+  const progress = computeChallengeProgress(challenge, [beforeWindow, insideWindow, afterWindow], challenge.endsAt - 1);
+  assert.equal(progress.totalWorkouts, 3);
+  assert.equal(progress.validWorkouts, 1);
+  assert.equal(progress.validActiveDays, 1);
 });
 
 test('challenge settlement keeps manual payment requests private', () => {

@@ -85,6 +85,8 @@ export function formatDateInput(timestamp) {
 export function workoutMeetsChallenge(workoutEntry, challenge) {
   if (!workoutEntry?.claim || !challenge) return false;
   if (workoutEntry.challengeId !== challenge.id && workoutEntry.claim.challenge_id !== challenge.id) return false;
+  const stoppedAt = workoutEntry.claim.stopped_at || workoutEntry.stoppedAt || 0;
+  if (stoppedAt < challenge.startsAt || stoppedAt >= challenge.endsAt) return false;
   if (workoutEntry.claim.duration_seconds < challenge.minMinutesPerActiveDay * 60) return false;
   if (challenge.minDistanceKm && (workoutEntry.claim.distance_km || 0) < challenge.minDistanceKm) return false;
   return true;
@@ -125,14 +127,52 @@ export function createChallengeSettlement({ challenge, history = [], progress })
   };
 }
 
-export function createInviteText(challenge) {
+function base64UrlEncode(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function base64UrlDecode(value) {
+  const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+export function encodeChallengeInvite(challenge) {
+  return base64UrlEncode(JSON.stringify({
+    version: 1,
+    challenge
+  }));
+}
+
+export function decodeChallengeInvite(token) {
+  const payload = JSON.parse(base64UrlDecode(token));
+  if (payload?.version !== 1 || !payload.challenge?.id || !payload.challenge?.code) throw new Error('Invalid challenge invite.');
+  return payload.challenge;
+}
+
+export function createChallengeInviteUrl(challenge, appUrl) {
+  if (!appUrl) return '';
+  const url = new URL(appUrl);
+  url.hash = `challenge=${encodeChallengeInvite(challenge)}`;
+  return url.toString();
+}
+
+export function createInviteText(challenge, appUrl = '') {
+  const inviteUrl = createChallengeInviteUrl(challenge, appUrl);
   const lines = [
     `Move2Improve challenge: ${challenge.code}`,
+    inviteUrl ? `Open / join: ${inviteUrl}` : '',
     `${challenge.durationDays} days, ${challenge.requiredActiveDays} active days required`,
     `Minimum per active day: ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` + ${challenge.minDistanceKm} km` : ''}`,
     `Group members listed locally: ${challenge.participants.length || 'open group'}`,
     'Share this invite in your existing group chat. M2I does not host chat or participant messages.',
+    'Opening the link imports the challenge rules locally on that device.',
     'Payment, if any, is manual. M2I never holds funds or pays automatically.'
-  ];
+  ].filter(Boolean);
   return lines.join('\n');
 }

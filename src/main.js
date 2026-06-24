@@ -4,7 +4,7 @@ import { createClaim, createHistoryEntry, createPublicClaimProjection } from './
 import { formatDuration, shortNpub, clampText } from './format.js';
 import { generateNsec, keyInfoFromNsec, parseNpub, publishEvent, signClaimEvent, signPublicClaimEvent, createNip17DirectMessage } from './nostr.js';
 import { createSatsPaymentRequest, createUsdtPaymentRequest } from './payment.js';
-import { computeChallengeProgress, createChallengePlan, createChallengeSettlement, createInviteText, formatDateInput } from './challenge.js';
+import { computeChallengeProgress, createChallengePlan, createChallengeSettlement, createInviteText, decodeChallengeInvite, formatDateInput } from './challenge.js';
 import { createGpsTracker } from './gps.js';
 import { createStorage } from './storage.js';
 import { createWorkout, elapsedMs, requestWakeLock, targetDeltaSeconds } from './stopwatch.js';
@@ -45,11 +45,33 @@ function loadKey() {
 
 function boot() {
   state.key = loadKey();
-  state.screen = state.key ? (state.activeWorkout ? 'workout' : 'home') : 'key';
+  const importedChallenge = importChallengeFromUrl();
+  state.activeChallengeId = importedChallenge?.id || store.getActiveChallengeId();
+  state.screen = state.key ? (state.activeWorkout ? 'workout' : importedChallenge ? 'challenge' : 'home') : 'key';
+  if (importedChallenge) state.message = `Challenge ${importedChallenge.code} imported locally.`;
   render();
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => navigator.serviceWorker.register(new URL('../sw.js', import.meta.url)).catch(() => {}));
   }
+}
+
+function importChallengeFromUrl() {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const token = params.get('challenge');
+  if (!token) return null;
+  try {
+    const challenge = decodeChallengeInvite(token);
+    store.saveChallenge(challenge);
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    return challenge;
+  } catch {
+    state.message = 'Challenge invite link could not be imported.';
+    return null;
+  }
+}
+
+function appBaseUrl() {
+  return new URL(window.location.pathname, window.location.origin).toString();
 }
 
 function startTimer() {
@@ -614,7 +636,7 @@ app.addEventListener('click', async (event) => {
   }
   if (action === 'copy-invite') {
     const challenge = store.getChallenge(state.activeChallengeId);
-    if (challenge) copy(createInviteText(challenge));
+    if (challenge) copy(createInviteText(challenge, appBaseUrl()));
   }
   if (action === 'copy-challenge-settlement') {
     const challenge = store.getChallenge(state.activeChallengeId);
