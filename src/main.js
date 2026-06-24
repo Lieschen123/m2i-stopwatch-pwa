@@ -293,7 +293,8 @@ function renderHomeScreen() {
         <label>Minimum minutes per active day<input name="minMinutesPerActiveDay" inputmode="numeric" type="number" min="1" step="1" value="45"></label>
         <label>Optional minimum km<input name="minDistanceKm" inputmode="decimal" type="number" min="0" step="0.1" placeholder="off"></label>
       </div>
-      <label>Participants, one per line<textarea name="participantsText" maxlength="1200" rows="4" placeholder="Nono\nAlex\nMia"></textarea></label>
+      <label>Group members, optional<textarea name="participantsText" maxlength="1200" rows="4" placeholder="Names only, one per line\nNono\nAlex\nMia"></textarea></label>
+      <p class="fineprint">No emails. This roster stays local on this device. Share the invite in your existing group chat.</p>
       <fieldset class="stake-box">
         <legend>Optional USDt settlement request</legend>
         <label>Amount<input name="usdtStakeAmount" inputmode="decimal" type="number" min="0" step="0.01" placeholder="2.00"></label>
@@ -321,7 +322,7 @@ function renderChallengeCard(challenge, history) {
         <h3>${escapeHtml(challenge.code)}</h3>
         <p>${progress.validActiveDays} / ${challenge.requiredActiveDays} valid days · ${progress.daysRemaining} days left</p>
         <p>${challenge.durationDays} days · ${challenge.minMinutesPerActiveDay} min active day${challenge.minDistanceKm ? ` · ${challenge.minDistanceKm} km min` : ''}</p>
-        <p>${challenge.participants.length || 'Open'} participant${challenge.participants.length === 1 ? '' : 's'} · ${challenge.paymentRequests?.length ? 'manual settlement request' : 'no payment request'}</p>
+        <p>${challenge.participants.length || 'Open'} group member${challenge.participants.length === 1 ? '' : 's'} · ${challenge.paymentRequests?.length ? 'manual settlement request' : 'no payment request'}</p>
       </div>
       <button class="secondary" data-action="open-challenge" data-challenge-id="${escapeHtml(challenge.id)}">Open</button>
     </article>`;
@@ -343,7 +344,7 @@ function renderChallengeScreen() {
         <div><strong>${progress.daysRemaining}</strong><span>days left</span></div>
       </div>
       <p class="muted">${challenge.durationDays} days. A valid active day needs at least ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` and ${challenge.minDistanceKm} km` : ''}. Progress is collected locally on this device.</p>
-      ${challenge.participants.length ? `<section class="roster"><p class="eyebrow">Participants</p>${challenge.participants.map((participant) => `<span>${escapeHtml(participant.displayName)}</span>`).join('')}</section>` : ''}
+      ${challenge.participants.length ? `<section class="roster"><p class="eyebrow">Local group roster</p>${challenge.participants.map((participant) => `<span>${escapeHtml(participant.displayName)}</span>`).join('')}<p class="fineprint">Roster is local. Participants confirm in your group chat; final bot sync uses success/fail attestations only.</p></section>` : '<p class="fineprint">No roster yet. Share the invite in your group chat; M2I does not host chat or participant messages.</p>'}
       ${renderChallengePaymentSummary(challenge)}
       <form class="stack" data-form="start-challenge-workout" data-challenge-id="${escapeHtml(challenge.id)}">
         <label class="checkline privacy-check"><input type="checkbox" name="gpsEnabled" checked> Add local GPS aggregate distance</label>

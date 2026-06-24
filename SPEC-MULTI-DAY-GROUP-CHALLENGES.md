@@ -193,3 +193,23 @@ Manual iPhone tests:
 - verify progress increments
 - verify private settlement shows payment request
 - verify public share stays redacted
+
+## Coordination Lock
+
+Participants are local roster entries, not email accounts. The field should be understood as:
+
+> Group members, optional. Names only, one per line. Use npub only if you want private Nostr identity binding.
+
+No email invitation flow is part of V1.
+
+Group chat remains external. The app should generate invite text for copy/paste into the user's existing group chat.
+
+Final group accountability should not require the organizer to import every workout. The next coordinator layer is a final-attestation bot:
+
+- PWA computes success/fail locally.
+- Participant submits one final signed success/fail attestation.
+- Bot groups submissions by challenge hash.
+- Bot shows who succeeded, who failed, and what failed participants owe the Team jar.
+- Bot does not receive workouts, GPS, rules, or daily progress by default.
+
+The challenge hash is computed from the canonical local challenge rules. The bot does not need the plaintext rules.

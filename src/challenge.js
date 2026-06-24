@@ -108,7 +108,8 @@ export function createInviteText(challenge) {
     `Move2Improve challenge: ${challenge.code}`,
     `${challenge.durationDays} days, ${challenge.requiredActiveDays} active days required`,
     `Minimum per active day: ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` + ${challenge.minDistanceKm} km` : ''}`,
-    `Participants: ${challenge.participants.length || 'open group'}`,
+    `Group members listed locally: ${challenge.participants.length || 'open group'}`,
+    'Share this invite in your existing group chat. M2I does not host chat or participant messages.',
     'Payment, if any, is manual. M2I never holds funds or pays automatically.'
   ];
   return lines.join('\n');

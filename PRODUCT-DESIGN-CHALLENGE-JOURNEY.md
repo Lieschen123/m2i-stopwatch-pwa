@@ -149,3 +149,22 @@ Defer:
 - Winner payout logic
 - Own Nostr relay
 - HealthKit / Strava imports
+
+## Locked Coordination Model: External Group Chat + Final Bot Attestation
+
+M2I does not host chat in V1. The group talks where it already talks: Signal, WhatsApp, Telegram, Keet, or Nostr. The app creates invite text and proof/settlement payloads, but it does not become the social surface.
+
+Participants are names or optional npubs stored locally. Emails are intentionally avoided because they introduce PII, account expectations, delivery tracking, and backend requirements.
+
+The final sync layer should be privacy-minimal:
+
+- During the challenge, users track locally.
+- The bot receives no daily workout logs.
+- At the end, each participant submits one final signed attestation: succeeded or failed.
+- The bot groups attestations by challenge hash, not plaintext rules.
+- The bot acts as a noticeboard: who succeeded, who failed, who owes the team jar.
+- The group verifies the arithmetic socially.
+
+The bot does not need to know the rule details such as `30 days / 10 active days / 45 minutes`. Those rules stay local and are represented to the bot only by a challenge hash.
+
+Public web hosting remains compatible with privacy because GitHub Pages serves only the app shell. Challenge data, group members, payment requests, GPS samples, local history, and final results stay in the browser unless the user explicitly shares them.
