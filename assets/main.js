@@ -6,7 +6,7 @@ var os=Object.defineProperty;var ae=(e,t)=>()=>(e&&(t=e(e=0)),t);var ss=(e,t)=>{
       <header class="topbar">
         <div>
           <p class="eyebrow">Move2Improve</p>
-          <h1>I Got This</h1>
+          <h1>I totally got this.</h1>
         </div>
         ${_.key?'<button class="ghost" data-action="settings">Settings</button>':""}
       </header>
