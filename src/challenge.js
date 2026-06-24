@@ -162,6 +162,16 @@ export function createChallengeInviteUrl(challenge, appUrl) {
   return url.toString();
 }
 
+function summarizePaymentRequests(paymentRequests = []) {
+  if (!paymentRequests.length) return 'No payment request.';
+  const summaries = paymentRequests.map((request) => {
+    if (request.asset === 'USDt') return `${request.amount.toFixed(2)} USDt on ${request.network.toUpperCase()}`;
+    if (request.asset === 'sats') return `${request.amount_sats || 'Sats'} sats / ${request.network}`;
+    return `${request.asset || 'Manual'} request`;
+  });
+  return `Manual team jar request: ${summaries.join(' + ')}.`;
+}
+
 export function createInviteText(challenge, appUrl = '') {
   const inviteUrl = createChallengeInviteUrl(challenge, appUrl);
   const lines = [
@@ -170,9 +180,10 @@ export function createInviteText(challenge, appUrl = '') {
     `${challenge.durationDays} days, ${challenge.requiredActiveDays} active days required`,
     `Minimum per active day: ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` + ${challenge.minDistanceKm} km` : ''}`,
     `Group members listed locally: ${challenge.participants.length || 'open group'}`,
+    summarizePaymentRequests(challenge.paymentRequests),
     'Share this invite in your existing group chat. M2I does not host chat or participant messages.',
     'Opening the link imports the challenge rules locally on that device.',
-    'Payment, if any, is manual. M2I never holds funds or pays automatically.'
+    'Settlement is manual. M2I never holds funds or pays automatically.'
   ].filter(Boolean);
   return lines.join('\n');
 }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { verifyEvent } from 'nostr-tools/pure';
-import { createChallengeInviteUrl, createChallengePlan, computeChallengeProgress, createChallengeSettlement, decodeChallengeInvite, formatDateInput, parseParticipants } from '../src/challenge.js';
+import { createChallengeInviteUrl, createChallengePlan, computeChallengeProgress, createChallengeSettlement, createInviteText, decodeChallengeInvite, formatDateInput, parseParticipants } from '../src/challenge.js';
 import { createClaim, createHistoryEntry, createPublicClaimProjection } from '../src/claim.js';
 import { canonicalJson, sha256Hex } from '../src/crypto.js';
 import { createGpsTracker, distanceMeters } from '../src/gps.js';
@@ -73,6 +73,11 @@ test('creates clickable challenge invite URL that can be imported locally', () =
   assert.equal(imported.code, 'FLOW-TEST');
   assert.equal(imported.participants.length, 2);
   assert.equal(imported.paymentRequests[0].amount, 2);
+
+  const inviteText = createInviteText(challenge, 'https://lieschen123.github.io/m2i-stopwatch-pwa/');
+  assert.match(inviteText, /Open \/ join: https:\/\/lieschen123\.github\.io\/m2i-stopwatch-pwa\/#challenge=/);
+  assert.match(inviteText, /Manual team jar request: 2\.00 USDt on TON\./);
+  assert.doesNotMatch(inviteText, /without stakes/i);
 });
 
 test('computes local challenge progress by valid active day', () => {
