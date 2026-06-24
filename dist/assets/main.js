@@ -74,7 +74,7 @@ Mia"></textarea></label>
         <h3>${Y(e.code)}</h3>
         <p>${n.validActiveDays} / ${e.requiredActiveDays} valid days \xB7 ${n.daysRemaining} days left</p>
         <p>Starts ${new Date(e.startsAt).toLocaleDateString()} \xB7 ${e.durationDays} days \xB7 ${e.minMinutesPerActiveDay} min active day${e.minDistanceKm?` \xB7 ${e.minDistanceKm} km min`:""}</p>
-        <p>${e.participants.length||"Open"} group member${e.participants.length===1?"":"s"} \xB7 ${e.paymentRequests?.length?"manual settlement request":"no payment request"}</p>
+        <p>${e.participants.length||"Open"} group member${e.participants.length===1?"":"s"} \xB7 ${e.paymentRequests?.length?"manual team jar request":"no payment request"}</p>
       </div>
       <button class="secondary" data-action="open-challenge" data-challenge-id="${Y(e.id)}">Open</button>
     </article>`}function ga(){let e=$.getChallenge(E.activeChallengeId);if(!e)return Zn();let t=$.getHistory(),n=Kt(e,t),r=zn({challenge:e,history:t,progress:n}),o=t.filter(s=>s.challengeId===e.id||s.claim?.challenge_id===e.id);He(`
@@ -101,7 +101,7 @@ Mia"></textarea></label>
       ${o.length?`<section class="stack"><h3>Local claims</h3>${o.map(s=>`<article class="history-item"><div><strong>${Y(s.durationHuman)}</strong><span>${new Date(s.stoppedAt).toLocaleString()}</span></div><span>${s.claim.distance_km!==void 0?`${s.claim.distance_km.toFixed(3)} km`:"duration only"}</span><button class="ghost" data-action="open-claim" data-claim-id="${Y(s.id)}">Open</button></article>`).join("")}</section>`:'<p class="muted">No local workout claims yet.</p>'}
       <textarea class="json-output" readonly rows="8">${Y(JSON.stringify(r,null,2))}</textarea>
       <button class="ghost" data-action="home">Back</button>
-    </section>`)}function ma(e){return e.paymentRequests?.length?`<section class="payment-card"><p class="eyebrow">Manual settlement request</p>${e.paymentRequests.map(t=>`<p>${t.asset==="USDt"?`${t.amount.toFixed(2)} USDt on ${t.network.toUpperCase()}`:`${t.amount_sats||"Sats"} sats / ${t.network}`} \xB7 manual only</p>`).join("")}<p class="fineprint">Payment happens after final review from each user's own wallet. M2I does not pay, custody, or monitor settlement.</p></section>`:'<p class="fineprint">No payment request. You can use this challenge without stakes.</p>'}function ya(){He(`
+    </section>`)}function ma(e){return e.paymentRequests?.length?`<section class="payment-card"><p class="eyebrow">Manual team jar request</p>${e.paymentRequests.map(t=>`<p>${t.asset==="USDt"?`${t.amount.toFixed(2)} USDt on ${t.network.toUpperCase()}`:`${t.amount_sats||"Sats"} sats / ${t.network}`}</p>`).join("")}<p class="fineprint">Settlement is manual after final review. M2I never holds funds, pays automatically, or monitors settlement.</p></section>`:'<p class="fineprint">No payment request configured.</p>'}function ya(){He(`
     <section class="workout-screen">
       <p class="eyebrow">${Y(E.activeWorkout.challengeCode)}</p>
       <div class="timer" data-elapsed>${Te(zt(E.activeWorkout))}</div>

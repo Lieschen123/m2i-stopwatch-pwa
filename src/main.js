@@ -346,7 +346,7 @@ function renderChallengeCard(challenge, history) {
         <h3>${escapeHtml(challenge.code)}</h3>
         <p>${progress.validActiveDays} / ${challenge.requiredActiveDays} valid days · ${progress.daysRemaining} days left</p>
         <p>Starts ${new Date(challenge.startsAt).toLocaleDateString()} · ${challenge.durationDays} days · ${challenge.minMinutesPerActiveDay} min active day${challenge.minDistanceKm ? ` · ${challenge.minDistanceKm} km min` : ''}</p>
-        <p>${challenge.participants.length || 'Open'} group member${challenge.participants.length === 1 ? '' : 's'} · ${challenge.paymentRequests?.length ? 'manual settlement request' : 'no payment request'}</p>
+        <p>${challenge.participants.length || 'Open'} group member${challenge.participants.length === 1 ? '' : 's'} · ${challenge.paymentRequests?.length ? 'manual team jar request' : 'no payment request'}</p>
       </div>
       <button class="secondary" data-action="open-challenge" data-challenge-id="${escapeHtml(challenge.id)}">Open</button>
     </article>`;
@@ -387,8 +387,8 @@ function renderChallengeScreen() {
 }
 
 function renderChallengePaymentSummary(challenge) {
-  if (!challenge.paymentRequests?.length) return '<p class="fineprint">No payment request. You can use this challenge without stakes.</p>';
-  return `<section class="payment-card"><p class="eyebrow">Manual settlement request</p>${challenge.paymentRequests.map((request) => `<p>${request.asset === 'USDt' ? `${request.amount.toFixed(2)} USDt on ${request.network.toUpperCase()}` : `${request.amount_sats || 'Sats'} sats / ${request.network}`} · manual only</p>`).join('')}<p class="fineprint">Payment happens after final review from each user's own wallet. M2I does not pay, custody, or monitor settlement.</p></section>`;
+  if (!challenge.paymentRequests?.length) return '<p class="fineprint">No payment request configured.</p>';
+  return `<section class="payment-card"><p class="eyebrow">Manual team jar request</p>${challenge.paymentRequests.map((request) => `<p>${request.asset === 'USDt' ? `${request.amount.toFixed(2)} USDt on ${request.network.toUpperCase()}` : `${request.amount_sats || 'Sats'} sats / ${request.network}`}</p>`).join('')}<p class="fineprint">Settlement is manual after final review. M2I never holds funds, pays automatically, or monitors settlement.</p></section>`;
 }
 
 function renderWorkoutScreen() {
