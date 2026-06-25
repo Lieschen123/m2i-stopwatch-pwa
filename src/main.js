@@ -304,7 +304,7 @@ function renderHomeScreen() {
       <span>${escapeHtml(profile.displayName || 'Ready')}</span>
       <strong>${shortNpub(state.key.npub)}</strong>
     </section>
-    ${challenges.length ? `<section class="panel stack"><h2>Active challenges</h2>${challenges.map((challenge) => renderChallengeCard(challenge, history)).join('')}</section>` : ''}
+    ${challenges.length ? `<section class="panel stack"><h2>Challenges</h2>${challenges.map((challenge) => renderChallengeCard(challenge, history)).join('')}</section>` : ''}
     <form class="panel stack" data-form="create-challenge">
       <h2>Create Challenge</h2>
       <label>Challenge name/code<input name="challengeCode" required maxlength="80" placeholder="JUNE-RUN"></label>
@@ -340,16 +340,24 @@ function renderHomeScreen() {
 
 function renderChallengeCard(challenge, history) {
   const progress = computeChallengeProgress(challenge, history);
+  const status = challengeStatus(progress);
+  const timing = progress.isExpired ? status : `${progress.daysRemaining} days left`;
   return `
     <article class="challenge-card">
       <div>
         <h3>${escapeHtml(challenge.code)}</h3>
-        <p>${progress.validActiveDays} / ${challenge.requiredActiveDays} valid days · ${progress.daysRemaining} days left</p>
-        <p>Starts ${new Date(challenge.startsAt).toLocaleDateString()} · ${challenge.durationDays} days · ${challenge.minMinutesPerActiveDay} min active day${challenge.minDistanceKm ? ` · ${challenge.minDistanceKm} km min` : ''}</p>
+        <p>${progress.validActiveDays} / ${challenge.requiredActiveDays} valid days · ${timing}</p>
+        <p>Starts ${new Date(challenge.startsAt).toLocaleDateString()} · closes ${new Date(challenge.endsAt).toLocaleString()} · ${challenge.minMinutesPerActiveDay} min active day${challenge.minDistanceKm ? ` · ${challenge.minDistanceKm} km min` : ''}</p>
         <p>${challenge.participants.length || 'Open'} group member${challenge.participants.length === 1 ? '' : 's'} · ${challenge.paymentRequests?.length ? 'manual team jar request' : 'no payment request'}</p>
       </div>
-      <button class="secondary" data-action="open-challenge" data-challenge-id="${escapeHtml(challenge.id)}">Open</button>
+      <button class="secondary" data-action="open-challenge" data-challenge-id="${escapeHtml(challenge.id)}">${progress.isExpired ? 'Review' : 'Open'}</button>
     </article>`;
+}
+
+function challengeStatus(progress) {
+  if (progress.isComplete) return 'Complete';
+  if (progress.isExpired) return 'Closed';
+  return 'Open';
 }
 
 function renderChallengeScreen() {
@@ -359,23 +367,24 @@ function renderChallengeScreen() {
   const progress = computeChallengeProgress(challenge, history);
   const settlement = createChallengeSettlement({ challenge, history, progress });
   const linked = history.filter((entry) => entry.challengeId === challenge.id || entry.claim?.challenge_id === challenge.id);
+  const status = challengeStatus(progress);
   renderShell(`
     <section class="panel stack">
       <h2>${escapeHtml(challenge.code)}</h2>
       <div class="progress-grid">
         <div><strong>${progress.validActiveDays} / ${challenge.requiredActiveDays}</strong><span>valid days</span></div>
         <div><strong>${progress.totalWorkouts}</strong><span>local workouts</span></div>
-        <div><strong>${progress.daysRemaining}</strong><span>days left</span></div>
+        <div><strong>${progress.isExpired ? status : progress.daysRemaining}</strong><span>${progress.isExpired ? 'status' : 'days left'}</span></div>
       </div>
-      <p class="muted">Starts ${new Date(challenge.startsAt).toLocaleDateString()} and ends ${new Date(challenge.endsAt).toLocaleDateString()}. A valid active day needs at least ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` and ${challenge.minDistanceKm} km` : ''}. Progress is collected locally on this device.</p>
+      <p class="muted">Starts ${new Date(challenge.startsAt).toLocaleDateString()} and closes ${new Date(challenge.endsAt).toLocaleString()}. A valid active day needs at least ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` and ${challenge.minDistanceKm} km` : ''}. Progress is collected locally on this device.</p>
       ${challenge.participants.length ? `<section class="roster"><p class="eyebrow">Local group roster</p>${challenge.participants.map((participant) => `<span>${escapeHtml(participant.displayName)}</span>`).join('')}<p class="fineprint">Roster is local. Participants confirm in your group chat; final bot sync uses success/fail attestations only.</p></section>` : '<p class="fineprint">No roster yet. Share the invite in your group chat; M2I does not host chat or participant messages.</p>'}
       ${renderChallengePaymentSummary(challenge)}
-      <form class="stack" data-form="start-challenge-workout" data-challenge-id="${escapeHtml(challenge.id)}">
+      ${progress.isExpired ? `<p class="notice">Challenge window is closed. Review progress and copy private settlement if needed.</p>` : `<form class="stack" data-form="start-challenge-workout" data-challenge-id="${escapeHtml(challenge.id)}">
         <label class="checkline privacy-check"><input type="checkbox" name="gpsEnabled" checked> Add local GPS aggregate distance</label>
         <p class="fineprint">Enable Safari Location: While Using + Precise Location. No route is stored or uploaded; route points stay in memory and are discarded at finish.</p>
         <label>Workout note, optional<textarea name="note" maxlength="280" rows="3" placeholder="Morning run"></textarea></label>
         <button type="submit" class="primary">Start workout for this challenge</button>
-      </form>
+      </form>`}
       <div class="actions-row">
         <button class="secondary" data-action="copy-invite">Copy invite</button>
         <button class="secondary" data-action="copy-challenge-settlement">Copy private settlement</button>

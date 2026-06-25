@@ -171,6 +171,10 @@ test('does not count workouts outside the challenge date window', () => {
   assert.equal(progress.totalWorkouts, 3);
   assert.equal(progress.validWorkouts, 1);
   assert.equal(progress.validActiveDays, 1);
+
+  const closedProgress = computeChallengeProgress(challenge, [insideWindow], challenge.endsAt);
+  assert.equal(closedProgress.isExpired, true);
+  assert.equal(closedProgress.daysRemaining, 0);
 });
 
 test('challenge settlement keeps manual payment requests private', () => {

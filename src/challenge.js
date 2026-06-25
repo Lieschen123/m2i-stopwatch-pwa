@@ -110,7 +110,7 @@ export function computeChallengeProgress(challenge, history = [], now = Date.now
     requiredActiveDays: challenge.requiredActiveDays,
     remainingActiveDays,
     isComplete: validActiveDays >= challenge.requiredActiveDays,
-    isExpired: now > challenge.endsAt,
+    isExpired: now >= challenge.endsAt,
     daysRemaining: Math.max(0, Math.ceil((challenge.endsAt - now) / DAY_MS))
   };
 }
