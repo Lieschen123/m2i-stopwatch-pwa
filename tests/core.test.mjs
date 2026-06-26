@@ -98,6 +98,21 @@ test('challenge invite text states no stake when no stake is configured', () => 
   assert.doesNotMatch(inviteText, /payment request/i);
 });
 
+test('challenge invite text uses singular minute grammar', () => {
+  const challenge = createChallengePlan({
+    code: 'ONE MINUTE',
+    startDate: '2026-06-24',
+    durationDays: '1',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '1',
+    participantsText: '',
+    createdAt: 1782290000000
+  });
+  const inviteText = createInviteText(challenge, 'https://lieschen123.github.io/m2i-stopwatch-pwa/');
+  assert.match(inviteText, /Minimum per active day: 1 minute/);
+  assert.doesNotMatch(inviteText, /1 minutes/);
+});
+
 test('computes local challenge progress by valid active day', () => {
   const challenge = createChallengePlan({
     code: '30 day run',
@@ -273,6 +288,96 @@ test('challenge settlement keeps manual payment requests private', () => {
   assert.equal(settlement.payment_policy.includes('only due if final review says the challenge was missed'), true);
   assert.equal(settlement.payment_policy.includes('If the challenge is complete, no payment is due'), true);
   assert.equal(settlement.payment_policy.includes('M2I never holds funds, pays automatically, or monitors settlement'), true);
+});
+
+test('challenge settlement marks open challenge with pending payment review', () => {
+  const challenge = createChallengePlan({
+    code: 'OPEN-STATUS',
+    startDate: '2024-06-18',
+    durationDays: '30',
+    requiredActiveDays: '2',
+    minMinutesPerActiveDay: '45',
+    createdAt: 1718700000000
+  });
+  const settlement = createChallengeSettlement({
+    challenge,
+    history: [],
+    progress: computeChallengeProgress(challenge, [], challenge.startsAt + 2 * 24 * 60 * 60 * 1000)
+  });
+
+  assert.equal(settlement.challenge_result, 'open');
+  assert.equal(settlement.payment_due, null);
+  assert.equal(settlement.payment_reason, 'Open — final review after close');
+});
+
+test('challenge settlement marks closed complete challenge with no payment due', () => {
+  const challenge = createChallengePlan({
+    code: 'COMPLETE-STATUS',
+    startDate: '2024-06-18',
+    durationDays: '2',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '45',
+    createdAt: 1718700000000
+  });
+  const validWorkout = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: challenge.startsAt,
+      stoppedAt: challenge.startsAt + 46 * 60 * 1000,
+      claimantNpub: 'npub1complete'
+    }),
+    event: { id: 'complete-event' }
+  });
+  const history = [validWorkout];
+  const settlement = createChallengeSettlement({
+    challenge,
+    history,
+    progress: computeChallengeProgress(challenge, history, challenge.endsAt)
+  });
+
+  assert.equal(settlement.challenge_result, 'complete');
+  assert.equal(settlement.payment_due, false);
+  assert.equal(settlement.payment_reason, 'Complete — no payment due');
+});
+
+test('challenge settlement marks closed incomplete challenge with stake due', () => {
+  const paymentRequest = createUsdtPaymentRequest({
+    amount: '2',
+    network: 'ton',
+    recipient: 'EQDteamjaraddress',
+    challengeCode: 'MISSED-STATUS'
+  });
+  const challenge = createChallengePlan({
+    code: 'MISSED-STATUS',
+    startDate: '2024-06-18',
+    durationDays: '2',
+    requiredActiveDays: '2',
+    minMinutesPerActiveDay: '45',
+    paymentRequests: [paymentRequest],
+    createdAt: 1718700000000
+  });
+  const shortWorkout = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: challenge.startsAt + 60 * 60 * 1000,
+      stoppedAt: challenge.startsAt + 65 * 60 * 1000,
+      claimantNpub: 'npub1missed'
+    }),
+    event: { id: 'missed-event' }
+  });
+  const history = [shortWorkout];
+  const settlement = createChallengeSettlement({
+    challenge,
+    history,
+    progress: computeChallengeProgress(challenge, history, challenge.endsAt)
+  });
+
+  assert.equal(settlement.challenge_result, 'missed');
+  assert.equal(settlement.payment_due, true);
+  assert.equal(settlement.payment_reason, 'Missed — stake due');
+  assert.equal(settlement.paymentRequests[0].amount, 2);
 });
 
 test('claim hash is stable for equivalent input', () => {

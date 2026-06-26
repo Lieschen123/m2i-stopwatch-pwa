@@ -4,7 +4,7 @@ import { createClaim, createHistoryEntry, createPublicClaimProjection } from './
 import { formatDuration, shortNpub, clampText } from './format.js';
 import { generateNsec, keyInfoFromNsec, parseNpub, publishEvent, signClaimEvent, signPublicClaimEvent, createNip17DirectMessage } from './nostr.js';
 import { createSatsPaymentRequest, createUsdtPaymentRequest } from './payment.js';
-import { computeChallengeProgress, createChallengePlan, createChallengeSettlement, createInviteText, decodeChallengeInvite, formatDateInput } from './challenge.js';
+import { computeChallengeProgress, createChallengePlan, createChallengeSettlement, createInviteText, decodeChallengeInvite, formatDateInput, getChallengeSettlementStatus } from './challenge.js';
 import { createGpsTracker } from './gps.js';
 import { createStorage } from './storage.js';
 import { createWorkout, elapsedMs, requestWakeLock, targetDeltaSeconds } from './stopwatch.js';
@@ -341,8 +341,9 @@ function renderHomeScreen() {
 
 function renderChallengeCard(challenge, history) {
   const progress = computeChallengeProgress(challenge, history);
-  const status = challengeStatus(progress);
-  const timing = progress.isExpired ? status : `${progress.daysRemaining} days left`;
+  const status = getChallengeSettlementStatus(progress);
+  const label = challengeStatus(progress);
+  const timing = progress.isExpired ? escapeHtml(status.payment_reason) : `${progress.daysRemaining} days left`;
   return `
     <article class="challenge-card">
       <div>
@@ -351,13 +352,13 @@ function renderChallengeCard(challenge, history) {
         <p>Starts ${new Date(challenge.startsAt).toLocaleDateString()} · closes ${new Date(challenge.endsAt).toLocaleString()} · ${challenge.minMinutesPerActiveDay} min active day${challenge.minDistanceKm ? ` · ${challenge.minDistanceKm} km distance goal` : ''}</p>
         <p>${challenge.participants.length || 'Open'} group member${challenge.participants.length === 1 ? '' : 's'} · ${challenge.paymentRequests?.length ? 'stake if missed' : 'no stake configured'}</p>
       </div>
-      <button class="secondary" data-action="open-challenge" data-challenge-id="${escapeHtml(challenge.id)}">${progress.isExpired ? 'Review' : 'Open'}</button>
+      <button class="secondary" data-action="open-challenge" data-challenge-id="${escapeHtml(challenge.id)}">${progress.isExpired ? label : 'Open'}</button>
     </article>`;
 }
 
 function challengeStatus(progress) {
   if (progress.isComplete) return 'Complete';
-  if (progress.isExpired) return 'Closed';
+  if (progress.isExpired) return 'Missed';
   return 'Open';
 }
 
@@ -369,6 +370,8 @@ function renderChallengeScreen() {
   const settlement = createChallengeSettlement({ challenge, history, progress });
   const linked = history.filter((entry) => entry.challengeId === challenge.id || entry.claim?.challenge_id === challenge.id);
   const status = challengeStatus(progress);
+  const settlementStatus = getChallengeSettlementStatus(progress);
+  const dueLabel = settlementStatus.payment_due === null ? 'Pending final review' : (settlementStatus.payment_due ? 'Payment due' : 'No payment due');
   renderShell(`
     <section class="panel stack">
       <h2>${escapeHtml(challenge.code)}</h2>
@@ -377,6 +380,7 @@ function renderChallengeScreen() {
         <div><strong>${progress.totalWorkouts}</strong><span>local workouts</span></div>
         <div><strong>${progress.isExpired ? status : progress.daysRemaining}</strong><span>${progress.isExpired ? 'status' : 'days left'}</span></div>
       </div>
+      <p class="notice"><strong>${escapeHtml(dueLabel)}.</strong> ${escapeHtml(settlementStatus.payment_reason)}</p>
       <p class="muted">Starts ${new Date(challenge.startsAt).toLocaleDateString()} and closes ${new Date(challenge.endsAt).toLocaleString()}. A valid active day needs at least ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` and ${challenge.minDistanceKm} km; both minimums must be met` : ''}. Progress is collected locally on this device.</p>
       ${challenge.participants.length ? `<section class="roster"><p class="eyebrow">Local group roster</p>${challenge.participants.map((participant) => `<span>${escapeHtml(participant.displayName)}</span>`).join('')}<p class="fineprint">Roster is local. Participants confirm in your group chat; final bot sync uses success/fail attestations only.</p></section>` : '<p class="fineprint">No roster yet. Share the invite in your group chat; M2I does not host chat or participant messages.</p>'}
       ${renderChallengePaymentSummary(challenge)}

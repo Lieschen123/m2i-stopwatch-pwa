@@ -115,12 +115,37 @@ export function computeChallengeProgress(challenge, history = [], now = Date.now
   };
 }
 
+export function getChallengeSettlementStatus(progress) {
+  if (!progress.isExpired) {
+    return {
+      challenge_result: 'open',
+      payment_due: null,
+      payment_reason: progress.isComplete ? 'Complete so far — final review after close' : 'Open — final review after close'
+    };
+  }
+  if (progress.isComplete) {
+    return {
+      challenge_result: 'complete',
+      payment_due: false,
+      payment_reason: 'Complete — no payment due'
+    };
+  }
+  return {
+    challenge_result: 'missed',
+    payment_due: true,
+    payment_reason: 'Missed — stake due'
+  };
+}
+
 export function createChallengeSettlement({ challenge, history = [], progress }) {
   const entries = history.filter((entry) => entry.challengeId === challenge.id || entry.claim?.challenge_id === challenge.id);
+  const currentProgress = progress || computeChallengeProgress(challenge, history);
+  const settlementStatus = getChallengeSettlementStatus(currentProgress);
   return {
     settlement_model: 'manual-group-settlement',
     challenge,
-    progress: progress || computeChallengeProgress(challenge, history),
+    progress: currentProgress,
+    ...settlementStatus,
     signed_claims: entries.map((entry) => entry.privateSettlement || { signed_event: entry.event }),
     paymentRequests: challenge.paymentRequests || [],
     payment_policy: 'Stake if missed is manual and only due if final review says the challenge was missed. If the challenge is complete, no payment is due. M2I never holds funds, pays automatically, or monitors settlement.'
@@ -174,11 +199,12 @@ function summarizePaymentRequests(paymentRequests = []) {
 
 export function createInviteText(challenge, appUrl = '') {
   const inviteUrl = createChallengeInviteUrl(challenge, appUrl);
+  const minuteLabel = challenge.minMinutesPerActiveDay === 1 ? 'minute' : 'minutes';
   const lines = [
     `Move2Improve challenge: ${challenge.code}`,
     inviteUrl ? `Open / join: ${inviteUrl}` : '',
     `${challenge.durationDays} days, ${challenge.requiredActiveDays} active days required`,
-    `Minimum per active day: ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` + ${challenge.minDistanceKm} km` : ''}`,
+    `Minimum per active day: ${challenge.minMinutesPerActiveDay} ${minuteLabel}${challenge.minDistanceKm ? ` + ${challenge.minDistanceKm} km` : ''}`,
     `Group members listed locally: ${challenge.participants.length || 'open group'}`,
     summarizePaymentRequests(challenge.paymentRequests),
     'Share this invite in your existing group chat. M2I does not host chat or participant messages.',
