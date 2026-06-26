@@ -31,7 +31,7 @@ export function createUsdtPaymentRequest({ amount, recipient, network = 'ton', c
     recipient: cleanRecipient,
     reference,
     custody: 'user-paid',
-    instruction: `Pay ${normalizedAmount.toFixed(2)} USDt on ${normalizedNetwork.toUpperCase()} to ${cleanRecipient}`,
+    instruction: `Stake if missed: ${normalizedAmount.toFixed(2)} USDt on ${normalizedNetwork.toUpperCase()} to ${cleanRecipient}`,
     memo: `M2I ${reference}`,
     settlement_model: 'payment-request-only'
   };
@@ -41,9 +41,10 @@ export function createUsdtPaymentRequest({ amount, recipient, network = 'ton', c
     payment_uri: createPaymentUri(request),
     request_text: [
       request.instruction,
+      'Only due if final review says the challenge was missed. If complete, no payment is due.',
       `Reference: ${request.reference}`,
       `Memo: ${request.memo}`,
-      'M2I does not custody funds or initiate this payment.'
+      'Manual settlement only. M2I never holds funds, pays automatically, or monitors settlement.'
     ].join('\n')
   };
 }
@@ -57,7 +58,7 @@ export function createSatsPaymentRequest({ amountSats, recipient, paymentUri, in
 
   const reference = cleanText(`${challengeCode || 'M2I'}:${String(claimHash || '').slice(0, 16)}`, 120);
   const instruction = cleanInstructions || [
-    sats ? `Pay ${sats} sats` : 'Pay sats',
+    sats ? `Stake if missed: ${sats} sats` : 'Stake if missed: sats',
     cleanRecipient ? `to team jar / recipient ${cleanRecipient}` : '',
     'using your own Lightning or Bitcoin wallet'
   ].filter(Boolean).join(' ');
@@ -80,9 +81,10 @@ export function createSatsPaymentRequest({ amountSats, recipient, paymentUri, in
       request.instruction,
       cleanRecipient ? `Team jar / recipient address or invoice: ${cleanRecipient}` : '',
       cleanPaymentUri ? `Payment URI: ${cleanPaymentUri}` : '',
+      'Only due if final review says the challenge was missed. If complete, no payment is due.',
       `Reference: ${request.reference}`,
       `Memo: ${request.memo}`,
-      'M2I does not custody funds, connect to your wallet, monitor settlement, or initiate this payment.'
+      'Manual settlement only. M2I never holds funds, pays automatically, or monitors settlement.'
     ].filter(Boolean).join('\n')
   };
 }

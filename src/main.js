@@ -316,22 +316,23 @@ function renderHomeScreen() {
         <label>Required active days<input name="requiredActiveDays" inputmode="numeric" type="number" min="1" step="1" value="10"></label>
         <label>Minimum minutes per active day<input name="minMinutesPerActiveDay" inputmode="numeric" type="number" min="1" step="1" value="45"></label>
       </div>
-      <label>Optional minimum km<input name="minDistanceKm" inputmode="decimal" type="number" min="0" step="0.1" placeholder="off"></label>
+      <label>Distance goal, optional<input name="minDistanceKm" inputmode="decimal" type="number" min="0" step="0.1" placeholder="off"></label>
+      <p class="fineprint">Leave empty if minutes are enough. If set, each active day must meet both minimum minutes and distance.</p>
       <label>Group members, optional<textarea name="participantsText" maxlength="1200" rows="4" placeholder="Names only, one per line\nNono\nAlex\nMia"></textarea></label>
       <p class="fineprint">No emails. This roster stays local on this device. Share the invite in your existing group chat.</p>
       <fieldset class="stake-box">
-        <legend>Optional USDt settlement request</legend>
+        <legend>USDt stake if missed, optional</legend>
         <label>Amount<input name="usdtStakeAmount" inputmode="decimal" type="number" min="0" step="0.01" placeholder="2.00"></label>
         <label>Network<select name="usdtNetwork"><option value="ton">TON</option><option value="tron">Tron</option><option value="ethereum">Ethereum</option></select></label>
         <label>Team jar / recipient address<input name="usdtRecipient" autocomplete="off" spellcheck="false" placeholder="Wallet address agreed by the group"></label>
-        <p class="fineprint">Manual request only. M2I never holds funds, stores spend authority, pays automatically, or polls settlement.</p>
+        <p class="fineprint">Only due if the challenge is missed after final review. If the challenge is complete, no payment is due. M2I never holds funds, pays automatically, or monitors settlement.</p>
       </fieldset>
       <fieldset class="stake-box">
-        <legend>Optional sats / Lightning settlement request</legend>
+        <legend>Sats / Lightning stake if missed, optional</legend>
         <label>Amount, sats<input name="satsAmount" inputmode="numeric" type="number" min="1" step="1" placeholder="2100"></label>
         <label>Team jar / recipient invoice, LNURL, or BTC address<input name="satsRecipient" autocomplete="off" spellcheck="false" placeholder="Team jar LNURL, lnbc..., lightning:..., or bc1..."></label>
         <label>Payment URI, optional<input name="satsPaymentUri" autocomplete="off" spellcheck="false" placeholder="lightning:lnurl... or bitcoin:bc1..."></label>
-        <label>Manual instructions, optional<textarea name="satsInstructions" maxlength="800" rows="3" placeholder="Pay the agreed Teamkasse/cause from your own wallet after final settlement."></textarea></label>
+        <label>Manual instructions, optional<textarea name="satsInstructions" maxlength="800" rows="3" placeholder="Only due from your own wallet if final review says the challenge was missed."></textarea></label>
       </fieldset>
       <button type="submit" class="primary">Create challenge</button>
     </form>
@@ -347,8 +348,8 @@ function renderChallengeCard(challenge, history) {
       <div>
         <h3>${escapeHtml(challenge.code)}</h3>
         <p>${progress.validActiveDays} / ${challenge.requiredActiveDays} valid days · ${timing}</p>
-        <p>Starts ${new Date(challenge.startsAt).toLocaleDateString()} · closes ${new Date(challenge.endsAt).toLocaleString()} · ${challenge.minMinutesPerActiveDay} min active day${challenge.minDistanceKm ? ` · ${challenge.minDistanceKm} km min` : ''}</p>
-        <p>${challenge.participants.length || 'Open'} group member${challenge.participants.length === 1 ? '' : 's'} · ${challenge.paymentRequests?.length ? 'manual team jar request' : 'no payment request'}</p>
+        <p>Starts ${new Date(challenge.startsAt).toLocaleDateString()} · closes ${new Date(challenge.endsAt).toLocaleString()} · ${challenge.minMinutesPerActiveDay} min active day${challenge.minDistanceKm ? ` · ${challenge.minDistanceKm} km distance goal` : ''}</p>
+        <p>${challenge.participants.length || 'Open'} group member${challenge.participants.length === 1 ? '' : 's'} · ${challenge.paymentRequests?.length ? 'stake if missed' : 'no stake configured'}</p>
       </div>
       <button class="secondary" data-action="open-challenge" data-challenge-id="${escapeHtml(challenge.id)}">${progress.isExpired ? 'Review' : 'Open'}</button>
     </article>`;
@@ -376,7 +377,7 @@ function renderChallengeScreen() {
         <div><strong>${progress.totalWorkouts}</strong><span>local workouts</span></div>
         <div><strong>${progress.isExpired ? status : progress.daysRemaining}</strong><span>${progress.isExpired ? 'status' : 'days left'}</span></div>
       </div>
-      <p class="muted">Starts ${new Date(challenge.startsAt).toLocaleDateString()} and closes ${new Date(challenge.endsAt).toLocaleString()}. A valid active day needs at least ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` and ${challenge.minDistanceKm} km` : ''}. Progress is collected locally on this device.</p>
+      <p class="muted">Starts ${new Date(challenge.startsAt).toLocaleDateString()} and closes ${new Date(challenge.endsAt).toLocaleString()}. A valid active day needs at least ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` and ${challenge.minDistanceKm} km; both minimums must be met` : ''}. Progress is collected locally on this device.</p>
       ${challenge.participants.length ? `<section class="roster"><p class="eyebrow">Local group roster</p>${challenge.participants.map((participant) => `<span>${escapeHtml(participant.displayName)}</span>`).join('')}<p class="fineprint">Roster is local. Participants confirm in your group chat; final bot sync uses success/fail attestations only.</p></section>` : '<p class="fineprint">No roster yet. Share the invite in your group chat; M2I does not host chat or participant messages.</p>'}
       ${renderChallengePaymentSummary(challenge)}
       ${progress.isExpired ? `<p class="notice">Challenge window is closed. Review progress and copy private settlement if needed.</p>` : `<form class="stack" data-form="start-challenge-workout" data-challenge-id="${escapeHtml(challenge.id)}">
@@ -396,8 +397,8 @@ function renderChallengeScreen() {
 }
 
 function renderChallengePaymentSummary(challenge) {
-  if (!challenge.paymentRequests?.length) return '<p class="fineprint">No payment request configured.</p>';
-  return `<section class="payment-card"><p class="eyebrow">Manual team jar request</p>${challenge.paymentRequests.map((request) => `<p>${request.asset === 'USDt' ? `${request.amount.toFixed(2)} USDt on ${request.network.toUpperCase()}` : `${request.amount_sats || 'Sats'} sats / ${request.network}`}</p>`).join('')}<p class="fineprint">Settlement is manual after final review. M2I never holds funds, pays automatically, or monitors settlement.</p></section>`;
+  if (!challenge.paymentRequests?.length) return '<p class="fineprint">No stake configured.</p>';
+  return `<section class="payment-card"><p class="eyebrow">Missed-challenge stake</p>${challenge.paymentRequests.map((request) => `<p>${request.asset === 'USDt' ? `Stake if missed: ${request.amount.toFixed(2)} USDt on ${request.network.toUpperCase()}` : `Stake if missed: ${request.amount_sats || 'Sats'} sats / ${request.network}`}</p>`).join('')}<p class="fineprint">Only due if the challenge is missed after final review. If the challenge is complete, no payment is due. M2I never holds funds, pays automatically, or monitors settlement.</p></section>`;
 }
 
 function renderWorkoutScreen() {
@@ -425,7 +426,7 @@ function renderClaimScreen(entry) {
   renderShell(`
     <section class="panel stack">
       <h2>Signed claim</h2>
-      <p class="muted">Private settlement JSON. It includes your signed claim event and any local manual payment requests. Public Nostr sharing is separate and redacted.</p>
+      <p class="muted">Private settlement JSON. It includes your signed claim event and any local missed-challenge stake instructions. Public Nostr sharing is separate and redacted.</p>
       <div class="claim-summary"><strong>${escapeHtml(entry.challengeCode)}</strong><span>${entry.durationHuman}</span>${distance}<span>Kind ${CLAIM_KIND}</span></div>
       ${gpsOutcome}
       <textarea class="json-output" readonly rows="10">${escapeHtml(json)}</textarea>
@@ -450,8 +451,8 @@ function renderPaymentRequests(entry) {
   return paymentRequests.map((paymentRequest, index) => {
     const isSats = paymentRequest.asset === 'sats';
     const title = isSats
-      ? `${paymentRequest.amount_sats ? `${paymentRequest.amount_sats} sats` : 'Sats'} manual request`
-      : `${paymentRequest.amount.toFixed(2)} USDt manual request`;
+      ? `${paymentRequest.amount_sats ? `${paymentRequest.amount_sats} sats` : 'Sats'} stake if missed`
+      : `${paymentRequest.amount.toFixed(2)} USDt stake if missed`;
     const rows = [
       ['Asset', paymentRequest.asset],
       ['Amount', isSats ? (paymentRequest.amount_sats ? `${paymentRequest.amount_sats} sats` : 'Sats amount not specified') : `${paymentRequest.amount.toFixed(2)} USDt`],
@@ -460,19 +461,19 @@ function renderPaymentRequests(entry) {
       ['Payment URI', paymentRequest.payment_uri || 'None provided'],
       ['Reference', paymentRequest.reference],
       ['Instructions', paymentRequest.instruction],
-      ['Model', 'Manual request only. Not automatic payment.']
+      ['Model', 'Manual stake only. Due only if final review says missed.']
     ];
     return `
     <section class="payment-card">
-      <p class="eyebrow">${isSats ? 'Sats / Lightning team jar request' : 'USDt payment request'}</p>
+      <p class="eyebrow">${isSats ? 'Sats / Lightning team jar stake' : 'USDt stake if missed'}</p>
       <h3>${title}</h3>
       <dl>
         ${rows.map(([term, value]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}
       </dl>
       <textarea class="json-output" readonly rows="5">${escapeHtml(paymentRequest.request_text)}</textarea>
-      <button class="primary" data-action="copy-payment" data-payment-index="${index}">Copy payment request</button>
+      <button class="primary" data-action="copy-payment" data-payment-index="${index}">Copy stake instructions</button>
       ${paymentRequest.payment_uri ? `<button class="secondary" data-action="copy-payment-uri" data-payment-index="${index}">Copy wallet URI</button>` : ''}
-      <p class="fineprint">Your wallet executes the payment. M2I does not connect to wallets, initiate payment, custody funds, or poll for settlement.</p>
+      <p class="fineprint">Only due if final review says this challenge was missed. Your wallet executes any payment manually. M2I never holds funds, pays automatically, or monitors settlement.</p>
     </section>`;
   }).join('');
 }

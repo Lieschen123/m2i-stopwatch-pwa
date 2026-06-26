@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { verifyEvent } from 'nostr-tools/pure';
-import { createChallengeInviteUrl, createChallengePlan, computeChallengeProgress, createChallengeSettlement, createInviteText, decodeChallengeInvite, formatDateInput, parseParticipants } from '../src/challenge.js';
+import { createChallengeInviteUrl, createChallengePlan, computeChallengeProgress, createChallengeSettlement, createInviteText, decodeChallengeInvite, formatDateInput, parseParticipants, workoutMeetsChallenge } from '../src/challenge.js';
 import { createClaim, createHistoryEntry, createPublicClaimProjection } from '../src/claim.js';
 import { canonicalJson, sha256Hex } from '../src/crypto.js';
 import { createGpsTracker, distanceMeters } from '../src/gps.js';
@@ -76,8 +76,26 @@ test('creates clickable challenge invite URL that can be imported locally', () =
 
   const inviteText = createInviteText(challenge, 'https://lieschen123.github.io/m2i-stopwatch-pwa/');
   assert.match(inviteText, /Open \/ join: https:\/\/lieschen123\.github\.io\/m2i-stopwatch-pwa\/#challenge=/);
-  assert.match(inviteText, /Manual team jar request: 2\.00 USDt on TON\./);
+  assert.match(inviteText, /Stake if missed: 2\.00 USDt on TON\./);
+  assert.match(inviteText, /only due if the challenge is missed after final review/i);
+  assert.doesNotMatch(inviteText, /payment request/i);
+  assert.doesNotMatch(inviteText, /Manual team jar request/i);
   assert.doesNotMatch(inviteText, /without stakes/i);
+});
+
+test('challenge invite text states no stake when no stake is configured', () => {
+  const challenge = createChallengePlan({
+    code: 'NO STAKE',
+    startDate: '2026-06-24',
+    durationDays: '1',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '2',
+    participantsText: '',
+    createdAt: 1782290000000
+  });
+  const inviteText = createInviteText(challenge, 'https://lieschen123.github.io/m2i-stopwatch-pwa/');
+  assert.match(inviteText, /No stake configured\./);
+  assert.doesNotMatch(inviteText, /payment request/i);
 });
 
 test('computes local challenge progress by valid active day', () => {
@@ -125,6 +143,62 @@ test('computes local challenge progress by valid active day', () => {
   assert.equal(progress.validWorkouts, 2);
   assert.equal(progress.validActiveDays, 2);
   assert.equal(progress.isComplete, true);
+});
+
+test('distance goal requires both minimum minutes and distance per active day', () => {
+  const challenge = createChallengePlan({
+    code: 'distance run',
+    startDate: '2024-06-18',
+    durationDays: '2',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '45',
+    minDistanceKm: '3.5',
+    createdAt: 1718700000000
+  });
+  const enoughMinutesShortDistance = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: 1718700000000,
+      stoppedAt: 1718700000000 + 46 * 60 * 1000,
+      claimantNpub: 'npub1m2itest',
+      gpsSummary: {
+        gps_used: true,
+        distance_meters: 2100,
+        distance_km: 2.1,
+        gps_sample_count: 2,
+        gps_rejected_sample_count: 0,
+        gps_accuracy_summary: '2 samples'
+      }
+    }),
+    event: { id: 'short-distance' }
+  });
+  const enoughMinutesAndDistance = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: 1718786400000,
+      stoppedAt: 1718786400000 + 46 * 60 * 1000,
+      claimantNpub: 'npub1m2itest',
+      gpsSummary: {
+        gps_used: true,
+        distance_meters: 3600,
+        distance_km: 3.6,
+        gps_sample_count: 2,
+        gps_rejected_sample_count: 0,
+        gps_accuracy_summary: '2 samples'
+      }
+    }),
+    event: { id: 'enough-distance' }
+  });
+
+  assert.equal(workoutMeetsChallenge(enoughMinutesShortDistance, challenge), false);
+  assert.equal(workoutMeetsChallenge(enoughMinutesAndDistance, challenge), true);
+
+  const progress = computeChallengeProgress(challenge, [enoughMinutesShortDistance, enoughMinutesAndDistance], 1718786400000);
+  assert.equal(progress.totalWorkouts, 2);
+  assert.equal(progress.validWorkouts, 1);
+  assert.equal(progress.validActiveDays, 1);
 });
 
 test('does not count workouts outside the challenge date window', () => {
@@ -196,7 +270,9 @@ test('challenge settlement keeps manual payment requests private', () => {
 
   assert.equal(settlement.settlement_model, 'manual-group-settlement');
   assert.equal(settlement.paymentRequests[0].amount, 2);
-  assert.equal(settlement.payment_policy.includes('does not connect to wallets'), true);
+  assert.equal(settlement.payment_policy.includes('only due if final review says the challenge was missed'), true);
+  assert.equal(settlement.payment_policy.includes('If the challenge is complete, no payment is due'), true);
+  assert.equal(settlement.payment_policy.includes('M2I never holds funds, pays automatically, or monitors settlement'), true);
 });
 
 test('claim hash is stable for equivalent input', () => {
@@ -490,8 +566,9 @@ test('private settlement JSON retains visible 2 USDt manual request fields', () 
   assert.equal(entry.paymentRequests[0].network, 'ton');
   assert.equal(entry.paymentRequests[0].recipient, 'EQDvisibleteamjaraddress');
   assert.match(entry.paymentRequests[0].payment_uri, /^ton:/);
-  assert.match(entry.paymentRequests[0].request_text, /Pay 2\.00 USDt on TON/);
-  assert.match(entry.paymentRequests[0].request_text, /M2I does not custody funds or initiate this payment/);
+  assert.match(entry.paymentRequests[0].request_text, /Stake if missed: 2\.00 USDt on TON/);
+  assert.match(entry.paymentRequests[0].request_text, /Only due if final review says the challenge was missed/);
+  assert.match(entry.paymentRequests[0].request_text, /M2I never holds funds, pays automatically, or monitors settlement/);
   assert.equal(entry.privateSettlement.paymentRequests[0].amount, 2);
   assert.equal(settlementJson.includes('"amount":2'), true);
   assert.equal(settlementJson.includes('"asset":"USDt"'), true);
@@ -521,7 +598,8 @@ test('creates manual sats payment request without wallet integration fields in c
   assert.match(request.payment_uri, /^lightning:/);
   assert.match(request.request_text, /team jar \/ recipient/);
   assert.match(request.request_text, /Team jar \/ recipient address or invoice/);
-  assert.match(request.request_text, /does not custody funds, connect to your wallet, monitor settlement, or initiate this payment/);
+  assert.match(request.request_text, /Only due if final review says the challenge was missed/);
+  assert.match(request.request_text, /M2I never holds funds, pays automatically, or monitors settlement/);
   assert.equal('recipient' in claim, false);
   assert.equal('amount_sats' in claim, false);
   assert.equal('payment_uri' in claim, false);

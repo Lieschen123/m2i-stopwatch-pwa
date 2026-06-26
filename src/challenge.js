@@ -123,7 +123,7 @@ export function createChallengeSettlement({ challenge, history = [], progress })
     progress: progress || computeChallengeProgress(challenge, history),
     signed_claims: entries.map((entry) => entry.privateSettlement || { signed_event: entry.event }),
     paymentRequests: challenge.paymentRequests || [],
-    payment_policy: 'Manual request only. M2I does not connect to wallets, initiate payments, custody funds, or poll settlement.'
+    payment_policy: 'Stake if missed is manual and only due if final review says the challenge was missed. If the challenge is complete, no payment is due. M2I never holds funds, pays automatically, or monitors settlement.'
   };
 }
 
@@ -163,13 +163,13 @@ export function createChallengeInviteUrl(challenge, appUrl) {
 }
 
 function summarizePaymentRequests(paymentRequests = []) {
-  if (!paymentRequests.length) return 'No payment request.';
+  if (!paymentRequests.length) return 'No stake configured.';
   const summaries = paymentRequests.map((request) => {
     if (request.asset === 'USDt') return `${request.amount.toFixed(2)} USDt on ${request.network.toUpperCase()}`;
     if (request.asset === 'sats') return `${request.amount_sats || 'Sats'} sats / ${request.network}`;
-    return `${request.asset || 'Manual'} request`;
+    return `${request.asset || 'Manual'} stake`;
   });
-  return `Manual team jar request: ${summaries.join(' + ')}.`;
+  return `Stake if missed: ${summaries.join(' + ')}.`;
 }
 
 export function createInviteText(challenge, appUrl = '') {
@@ -183,7 +183,8 @@ export function createInviteText(challenge, appUrl = '') {
     summarizePaymentRequests(challenge.paymentRequests),
     'Share this invite in your existing group chat. M2I does not host chat or participant messages.',
     'Opening the link imports the challenge rules locally on that device.',
-    'Settlement is manual. M2I never holds funds or pays automatically.'
+    'Stake is only due if the challenge is missed after final review. If complete, no payment is due.',
+    'M2I never holds funds, pays automatically, or monitors settlement.'
   ].filter(Boolean);
   return lines.join('\n');
 }
