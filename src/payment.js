@@ -1,3 +1,5 @@
+import { sha256Hex } from './crypto.js';
+
 const SUPPORTED_USDT_NETWORKS = new Set(['ton', 'tron', 'ethereum']);
 
 function cleanText(value, maxLength = 160) {
@@ -17,13 +19,84 @@ function normalizeSats(value) {
   return sats;
 }
 
-export function createUsdtPaymentRequest({ amount, recipient, network = 'ton', challengeCode, claimHash }) {
+export function createPaymentReferenceSuffix({ challengeId = '', challengeCode = '', createdAt = '', request = null } = {}) {
+  const seed = [
+    cleanText(challengeId, 180),
+    cleanText(challengeCode, 80),
+    cleanText(createdAt, 32),
+    request?.asset || '',
+    request?.network || '',
+    request?.recipient || '',
+    request?.amount || '',
+    request?.amount_sats || ''
+  ].join('|');
+  return sha256Hex(seed).slice(0, 16);
+}
+
+function referenceHasSuffix(reference) {
+  return /^[^:]+:.+/.test(String(reference || ''));
+}
+
+function createReference(challengeCode, referenceSuffix) {
+  return cleanText(`${challengeCode || 'M2I'}:${String(referenceSuffix || '').slice(0, 16)}`, 120);
+}
+
+function paymentRequestText(request) {
+  if (request.asset === 'USDt') {
+    return [
+      request.instruction,
+      'Only due if final review says the challenge was missed. If complete, no payment is due.',
+      `Reference: ${request.reference}`,
+      `Memo: ${request.memo}`,
+      'Manual settlement only. M2I never holds funds, pays automatically, or monitors settlement.'
+    ].join('\n');
+  }
+  return [
+    request.instruction,
+    request.recipient ? `Team jar / recipient address or invoice: ${request.recipient}` : '',
+    request.payment_uri ? `Payment URI: ${request.payment_uri}` : '',
+    'Only due if final review says the challenge was missed. If complete, no payment is due.',
+    `Reference: ${request.reference}`,
+    `Memo: ${request.memo}`,
+    'Manual settlement only. M2I never holds funds, pays automatically, or monitors settlement.'
+  ].filter(Boolean).join('\n');
+}
+
+function withPaymentRequestText(request) {
+  const next = {
+    ...request,
+    memo: `M2I ${request.reference}`
+  };
+  if (next.asset === 'USDt') next.payment_uri = createPaymentUri(next);
+  next.request_text = paymentRequestText(next);
+  return next;
+}
+
+export function normalizePaymentRequestReference(request, { challengeCode, challengeId, createdAt, referenceSuffix } = {}) {
+  if (!request) return null;
+  const currentReference = String(request.reference || '');
+  const currentSuffix = referenceHasSuffix(currentReference) ? currentReference.split(':').slice(1).join(':') : '';
+  const hasChallengeContext = Boolean(challengeId || createdAt);
+  const suffix = cleanText(
+    referenceSuffix || (hasChallengeContext ? createPaymentReferenceSuffix({ challengeId, challengeCode, createdAt, request }) : currentSuffix) || createPaymentReferenceSuffix({ challengeId, challengeCode, createdAt, request }),
+    32
+  );
+  const reference = createReference(challengeCode || currentReference.split(':')[0] || 'M2I', suffix);
+  if (request.reference === reference && request.memo === `M2I ${reference}` && request.request_text?.includes(`Reference: ${reference}`)) return request;
+  return withPaymentRequestText({ ...request, reference });
+}
+
+export function normalizePaymentRequests(paymentRequests = [], context = {}) {
+  return paymentRequests.map((request) => normalizePaymentRequestReference(request, context)).filter(Boolean);
+}
+
+export function createUsdtPaymentRequest({ amount, recipient, network = 'ton', challengeCode, claimHash, referenceSuffix }) {
   const normalizedAmount = normalizeAmount(amount);
   const normalizedNetwork = cleanText(network, 24).toLowerCase();
   const cleanRecipient = cleanText(recipient, 220);
   if (!normalizedAmount || !cleanRecipient || !SUPPORTED_USDT_NETWORKS.has(normalizedNetwork)) return null;
 
-  const reference = cleanText(`${challengeCode || 'M2I'}:${String(claimHash || '').slice(0, 16)}`, 120);
+  const reference = createReference(challengeCode, referenceSuffix || claimHash);
   const request = {
     asset: 'USDt',
     amount: normalizedAmount,
@@ -36,27 +109,17 @@ export function createUsdtPaymentRequest({ amount, recipient, network = 'ton', c
     settlement_model: 'payment-request-only'
   };
 
-  return {
-    ...request,
-    payment_uri: createPaymentUri(request),
-    request_text: [
-      request.instruction,
-      'Only due if final review says the challenge was missed. If complete, no payment is due.',
-      `Reference: ${request.reference}`,
-      `Memo: ${request.memo}`,
-      'Manual settlement only. M2I never holds funds, pays automatically, or monitors settlement.'
-    ].join('\n')
-  };
+  return withPaymentRequestText(request);
 }
 
-export function createSatsPaymentRequest({ amountSats, recipient, paymentUri, instructions, challengeCode, claimHash }) {
+export function createSatsPaymentRequest({ amountSats, recipient, paymentUri, instructions, challengeCode, claimHash, referenceSuffix }) {
   const sats = normalizeSats(amountSats);
   const cleanRecipient = cleanText(recipient, 320);
   const cleanPaymentUri = cleanText(paymentUri, 520);
   const cleanInstructions = cleanText(instructions, 800);
   if (!sats && !cleanRecipient && !cleanPaymentUri && !cleanInstructions) return null;
 
-  const reference = cleanText(`${challengeCode || 'M2I'}:${String(claimHash || '').slice(0, 16)}`, 120);
+  const reference = createReference(challengeCode, referenceSuffix || claimHash);
   const instruction = cleanInstructions || [
     sats ? `Stake if missed: ${sats} sats` : 'Stake if missed: sats',
     cleanRecipient ? `to team jar / recipient ${cleanRecipient}` : '',
@@ -74,19 +137,7 @@ export function createSatsPaymentRequest({ amountSats, recipient, paymentUri, in
     settlement_model: 'payment-request-only'
   };
 
-  return {
-    ...request,
-    payment_uri: cleanPaymentUri,
-    request_text: [
-      request.instruction,
-      cleanRecipient ? `Team jar / recipient address or invoice: ${cleanRecipient}` : '',
-      cleanPaymentUri ? `Payment URI: ${cleanPaymentUri}` : '',
-      'Only due if final review says the challenge was missed. If complete, no payment is due.',
-      `Reference: ${request.reference}`,
-      `Memo: ${request.memo}`,
-      'Manual settlement only. M2I never holds funds, pays automatically, or monitors settlement.'
-    ].filter(Boolean).join('\n')
-  };
+  return withPaymentRequestText({ ...request, payment_uri: cleanPaymentUri });
 }
 
 function createPaymentUri(request) {

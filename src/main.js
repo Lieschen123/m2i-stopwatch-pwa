@@ -4,7 +4,7 @@ import { createClaim, createHistoryEntry, createPublicClaimProjection } from './
 import { formatDuration, shortNpub, clampText } from './format.js';
 import { generateNsec, keyInfoFromNsec, parseNpub, publishEvent, signClaimEvent, signPublicClaimEvent, createNip17DirectMessage } from './nostr.js';
 import { createSatsPaymentRequest, createUsdtPaymentRequest } from './payment.js';
-import { computeChallengeProgress, createChallengePlan, createChallengeSettlement, createInviteText, decodeChallengeInvite, formatDateInput, getChallengeSettlementStatus } from './challenge.js';
+import { computeChallengeProgress, createChallengePlan, createChallengeSettlement, createInviteText, decodeChallengeInvite, formatDateInput, getChallengeSettlementStatus, normalizeChallengePaymentRequests } from './challenge.js';
 import { createGpsTracker } from './gps.js';
 import { createStorage } from './storage.js';
 import { createWorkout, elapsedMs, requestWakeLock, targetDeltaSeconds } from './stopwatch.js';
@@ -60,7 +60,7 @@ function importChallengeFromUrl() {
   const token = params.get('challenge');
   if (!token) return null;
   try {
-    const challenge = decodeChallengeInvite(token);
+    const challenge = normalizeChallengePaymentRequests(decodeChallengeInvite(token));
     store.saveChallenge(challenge);
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
     return challenge;
@@ -207,7 +207,8 @@ async function finishWorkout() {
     counterpartNpub: state.activeWorkout.counterpartNpub,
     nsec: store.getSecret()
   });
-  const paymentRequests = [
+  const challenge = state.activeWorkout.challengeId ? normalizeChallengePaymentRequests(store.getChallenge(state.activeWorkout.challengeId)) : null;
+  const paymentRequests = challenge?.paymentRequests?.length ? challenge.paymentRequests : [
     createUsdtPaymentRequest({
     amount: state.activeWorkout.usdtStakeAmount,
     recipient: state.activeWorkout.usdtRecipient,
@@ -363,7 +364,7 @@ function challengeStatus(progress) {
 }
 
 function renderChallengeScreen() {
-  const challenge = store.getChallenge(state.activeChallengeId);
+  const challenge = normalizeChallengePaymentRequests(store.getChallenge(state.activeChallengeId));
   if (!challenge) return renderHomeScreen();
   const history = store.getHistory();
   const progress = computeChallengeProgress(challenge, history);
@@ -649,11 +650,11 @@ app.addEventListener('click', async (event) => {
     setState({ activeChallengeId: id, screen: 'challenge', message: '' });
   }
   if (action === 'copy-invite') {
-    const challenge = store.getChallenge(state.activeChallengeId);
+    const challenge = normalizeChallengePaymentRequests(store.getChallenge(state.activeChallengeId));
     if (challenge) copy(createInviteText(challenge, appBaseUrl()));
   }
   if (action === 'copy-challenge-settlement') {
-    const challenge = store.getChallenge(state.activeChallengeId);
+    const challenge = normalizeChallengePaymentRequests(store.getChallenge(state.activeChallengeId));
     if (challenge) copy(JSON.stringify(createChallengeSettlement({ challenge, history: store.getHistory() }), null, 2));
   }
   if (action === 'open-claim') {

@@ -290,6 +290,105 @@ test('challenge settlement keeps manual payment requests private', () => {
   assert.equal(settlement.payment_policy.includes('M2I never holds funds, pays automatically, or monitors settlement'), true);
 });
 
+test('challenge-created stake references are suffixed and reused by claim proofs', () => {
+  const draftRequest = createUsdtPaymentRequest({
+    amount: '2',
+    network: 'ton',
+    recipient: 'EQDteamjaraddress',
+    challengeCode: 'STAKE-TEST-2'
+  });
+  const challenge = createChallengePlan({
+    code: 'STAKE-TEST-2',
+    startDate: '2026-06-26',
+    durationDays: '1',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '45',
+    paymentRequests: [draftRequest],
+    createdAt: 1782460000000
+  });
+  const claim = createClaim({
+    challengeId: challenge.id,
+    challengeCode: challenge.code,
+    startedAt: challenge.startsAt,
+    stoppedAt: challenge.startsAt + 10 * 60 * 1000,
+    claimantNpub: 'npub1stake'
+  });
+  const entry = createHistoryEntry({
+    claim,
+    event: { id: 'stake-event', kind: 30316 },
+    paymentRequests: challenge.paymentRequests
+  });
+  const settlement = createChallengeSettlement({
+    challenge,
+    history: [entry],
+    progress: computeChallengeProgress(challenge, [entry], challenge.endsAt)
+  });
+  const challengeRequest = settlement.paymentRequests[0];
+  const claimRequest = settlement.signed_claims[0].paymentRequests[0];
+
+  assert.match(challengeRequest.reference, /^STAKE-TEST-2:[0-9a-f]{16}$/);
+  assert.notEqual(challengeRequest.reference, 'STAKE-TEST-2:');
+  assert.equal(claimRequest.reference, challengeRequest.reference);
+  assert.equal(claimRequest.memo, challengeRequest.memo);
+  assert.equal(claimRequest.payment_uri, challengeRequest.payment_uri);
+  assert.equal(claimRequest.request_text, challengeRequest.request_text);
+});
+
+test('legacy empty challenge stake references normalize in copied challenge proof', () => {
+  const legacyChallengeRequest = createUsdtPaymentRequest({
+    amount: '2',
+    network: 'ton',
+    recipient: 'EQDteamjaraddress',
+    challengeCode: 'STAKE-TEST-2'
+  });
+  const legacyClaimRequest = createUsdtPaymentRequest({
+    amount: '2',
+    network: 'ton',
+    recipient: 'EQDteamjaraddress',
+    challengeCode: 'STAKE-TEST-2',
+    claimHash: '793d7544a4aea1dcffeeddccbbaa0099'
+  });
+  const challenge = {
+    ...createChallengePlan({
+      code: 'STAKE-TEST-2',
+      startDate: '2026-06-26',
+      durationDays: '1',
+      requiredActiveDays: '1',
+      minMinutesPerActiveDay: '45',
+      createdAt: 1782460000000
+    }),
+    paymentRequests: [legacyChallengeRequest]
+  };
+  const claim = createClaim({
+    challengeId: challenge.id,
+    challengeCode: challenge.code,
+    startedAt: challenge.startsAt,
+    stoppedAt: challenge.startsAt + 10 * 60 * 1000,
+    claimantNpub: 'npub1stake'
+  });
+  const entry = createHistoryEntry({
+    claim,
+    event: { id: 'legacy-stake-event', kind: 30316 },
+    paymentRequests: [legacyClaimRequest]
+  });
+  const settlement = createChallengeSettlement({
+    challenge,
+    history: [entry],
+    progress: computeChallengeProgress(challenge, [entry], challenge.endsAt)
+  });
+  const challengeRequest = settlement.paymentRequests[0];
+  const claimRequest = settlement.signed_claims[0].paymentRequests[0];
+
+  assert.equal(legacyChallengeRequest.reference, 'STAKE-TEST-2:');
+  assert.equal(legacyClaimRequest.reference, 'STAKE-TEST-2:793d7544a4aea1dc');
+  assert.match(challengeRequest.reference, /^STAKE-TEST-2:[0-9a-f]{16}$/);
+  assert.notEqual(challengeRequest.reference, 'STAKE-TEST-2:');
+  assert.equal(claimRequest.reference, challengeRequest.reference);
+  assert.equal(claimRequest.memo, challengeRequest.memo);
+  assert.equal(claimRequest.payment_uri, challengeRequest.payment_uri);
+  assert.equal(claimRequest.request_text, challengeRequest.request_text);
+});
+
 test('challenge settlement marks open challenge with pending payment review', () => {
   const challenge = createChallengePlan({
     code: 'OPEN-STATUS',

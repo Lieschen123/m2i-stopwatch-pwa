@@ -1,3 +1,5 @@
+import { normalizePaymentRequests } from './payment.js';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function safeNumber(value, fallback = 0) {
@@ -41,14 +43,20 @@ export function createChallengePlan({
   createdAt = Date.now()
 }) {
   const cleanCode = slug(code) || `M2I-${createdAt}`;
+  const id = `challenge-${cleanCode.toLowerCase()}-${createdAt}`;
   const days = Math.max(1, Math.round(safeNumber(durationDays, 30)));
   const requiredDays = Math.max(1, Math.round(safeNumber(requiredActiveDays, 10)));
   const minMinutes = Math.max(1, Math.round(safeNumber(minMinutesPerActiveDay, 45)));
   const minKm = safeNumber(minDistanceKm, 0) > 0 ? Number(safeNumber(minDistanceKm).toFixed(3)) : null;
   const participants = parseParticipants(participantsText);
   const startsAt = parseStartDate(startDate, createdAt);
+  const normalizedPaymentRequests = normalizePaymentRequests(paymentRequests, {
+    challengeCode: cleanCode,
+    challengeId: id,
+    createdAt
+  });
   return {
-    id: `challenge-${cleanCode.toLowerCase()}-${createdAt}`,
+    id,
     code: cleanCode,
     durationDays: days,
     requiredActiveDays: Math.min(requiredDays, days),
@@ -58,7 +66,7 @@ export function createChallengePlan({
     startsAt,
     endsAt: startsAt + days * DAY_MS,
     participants,
-    paymentRequests
+    paymentRequests: normalizedPaymentRequests
   };
 }
 
@@ -138,17 +146,42 @@ export function getChallengeSettlementStatus(progress) {
 }
 
 export function createChallengeSettlement({ challenge, history = [], progress }) {
+  const normalizedChallenge = normalizeChallengePaymentRequests(challenge);
   const entries = history.filter((entry) => entry.challengeId === challenge.id || entry.claim?.challenge_id === challenge.id);
-  const currentProgress = progress || computeChallengeProgress(challenge, history);
+  const currentProgress = progress || computeChallengeProgress(normalizedChallenge, history);
   const settlementStatus = getChallengeSettlementStatus(currentProgress);
   return {
     settlement_model: 'manual-group-settlement',
-    challenge,
+    challenge: normalizedChallenge,
     progress: currentProgress,
     ...settlementStatus,
-    signed_claims: entries.map((entry) => entry.privateSettlement || { signed_event: entry.event }),
-    paymentRequests: challenge.paymentRequests || [],
+    signed_claims: entries.map((entry) => normalizePrivateSettlementPaymentRequests(entry.privateSettlement || { signed_event: entry.event }, normalizedChallenge)),
+    paymentRequests: normalizedChallenge.paymentRequests || [],
     payment_policy: 'Stake if missed is manual and only due if final review says the challenge was missed. If the challenge is complete, no payment is due. M2I never holds funds, pays automatically, or monitors settlement.'
+  };
+}
+
+export function normalizeChallengePaymentRequests(challenge) {
+  if (!challenge) return challenge;
+  return {
+    ...challenge,
+    paymentRequests: normalizePaymentRequests(challenge.paymentRequests || [], {
+      challengeCode: challenge.code,
+      challengeId: challenge.id,
+      createdAt: challenge.createdAt
+    })
+  };
+}
+
+function normalizePrivateSettlementPaymentRequests(settlement, challenge) {
+  if (!settlement?.paymentRequests?.length) return settlement;
+  return {
+    ...settlement,
+    paymentRequests: normalizePaymentRequests(settlement.paymentRequests, {
+      challengeCode: challenge.code,
+      challengeId: challenge.id,
+      createdAt: challenge.createdAt
+    })
   };
 }
 
