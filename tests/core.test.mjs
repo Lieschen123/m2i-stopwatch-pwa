@@ -377,12 +377,14 @@ test('legacy empty challenge stake references normalize in copied challenge proo
     progress: computeChallengeProgress(challenge, [entry], challenge.endsAt)
   });
   const challengeRequest = settlement.paymentRequests[0];
+  const nestedChallengeRequest = settlement.challenge.paymentRequests[0];
   const claimRequest = settlement.signed_claims[0].paymentRequests[0];
 
   assert.equal(legacyChallengeRequest.reference, 'STAKE-TEST-2:');
   assert.equal(legacyClaimRequest.reference, 'STAKE-TEST-2:793d7544a4aea1dc');
-  assert.match(challengeRequest.reference, /^STAKE-TEST-2:[0-9a-f]{16}$/);
-  assert.notEqual(challengeRequest.reference, 'STAKE-TEST-2:');
+  assert.equal(challengeRequest.reference, 'STAKE-TEST-2:793d7544a4aea1dc');
+  assert.equal(nestedChallengeRequest.reference, 'STAKE-TEST-2:793d7544a4aea1dc');
+  assert.equal(JSON.stringify(settlement).includes('"reference":"STAKE-TEST-2:"'), false);
   assert.equal(claimRequest.reference, challengeRequest.reference);
   assert.equal(claimRequest.memo, challengeRequest.memo);
   assert.equal(claimRequest.payment_uri, challengeRequest.payment_uri);

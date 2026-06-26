@@ -146,8 +146,9 @@ export function getChallengeSettlementStatus(progress) {
 }
 
 export function createChallengeSettlement({ challenge, history = [], progress }) {
-  const normalizedChallenge = normalizeChallengePaymentRequests(challenge);
   const entries = history.filter((entry) => entry.challengeId === challenge.id || entry.claim?.challenge_id === challenge.id);
+  const referenceSuffixes = collectLinkedPaymentReferenceSuffixes(entries);
+  const normalizedChallenge = normalizeChallengePaymentRequests(challenge, referenceSuffixes);
   const currentProgress = progress || computeChallengeProgress(normalizedChallenge, history);
   const settlementStatus = getChallengeSettlementStatus(currentProgress);
   return {
@@ -155,34 +156,75 @@ export function createChallengeSettlement({ challenge, history = [], progress })
     challenge: normalizedChallenge,
     progress: currentProgress,
     ...settlementStatus,
-    signed_claims: entries.map((entry) => normalizePrivateSettlementPaymentRequests(entry.privateSettlement || { signed_event: entry.event }, normalizedChallenge)),
+    signed_claims: entries.map((entry) => normalizePrivateSettlementPaymentRequests(entry.privateSettlement || { signed_event: entry.event }, normalizedChallenge, referenceSuffixes)),
     paymentRequests: normalizedChallenge.paymentRequests || [],
     payment_policy: 'Stake if missed is manual and only due if final review says the challenge was missed. If the challenge is complete, no payment is due. M2I never holds funds, pays automatically, or monitors settlement.'
   };
 }
 
-export function normalizeChallengePaymentRequests(challenge) {
+export function normalizeChallengePaymentRequests(challenge, referenceSuffixes = new Map()) {
   if (!challenge) return challenge;
   return {
     ...challenge,
-    paymentRequests: normalizePaymentRequests(challenge.paymentRequests || [], {
-      challengeCode: challenge.code,
-      challengeId: challenge.id,
-      createdAt: challenge.createdAt
-    })
+    paymentRequests: normalizeChallengeScopedPaymentRequests(challenge.paymentRequests || [], challenge, referenceSuffixes)
   };
 }
 
-function normalizePrivateSettlementPaymentRequests(settlement, challenge) {
+function normalizeChallengeScopedPaymentRequests(paymentRequests, challenge, referenceSuffixes) {
+  return paymentRequests.map((request) => {
+    const referenceSuffix = referenceSuffixes.get(paymentRequestMatchKey(request));
+    return normalizePaymentRequests([request], {
+      challengeCode: challenge.code,
+      challengeId: challenge.id,
+      createdAt: challenge.createdAt,
+      referenceSuffix
+    })[0];
+  }).filter(Boolean);
+}
+
+function normalizePrivateSettlementPaymentRequests(settlement, challenge, referenceSuffixes) {
   if (!settlement?.paymentRequests?.length) return settlement;
   return {
     ...settlement,
-    paymentRequests: normalizePaymentRequests(settlement.paymentRequests, {
-      challengeCode: challenge.code,
-      challengeId: challenge.id,
-      createdAt: challenge.createdAt
-    })
+    paymentRequests: normalizeChallengeScopedPaymentRequests(settlement.paymentRequests, challenge, referenceSuffixes)
   };
+}
+
+function collectLinkedPaymentReferenceSuffixes(entries) {
+  const suffixes = new Map();
+  for (const entry of entries) {
+    const requests = linkedPaymentRequests(entry);
+    for (const request of requests) {
+      const suffix = paymentReferenceSuffix(request?.reference);
+      const key = paymentRequestMatchKey(request);
+      if (suffix && !suffixes.has(key)) suffixes.set(key, suffix);
+    }
+  }
+  return suffixes;
+}
+
+function linkedPaymentRequests(entry) {
+  if (Array.isArray(entry?.privateSettlement?.paymentRequests)) return entry.privateSettlement.paymentRequests;
+  if (Array.isArray(entry?.paymentRequests)) return entry.paymentRequests;
+  if (entry?.paymentRequest) return [entry.paymentRequest];
+  return [];
+}
+
+function paymentReferenceSuffix(reference) {
+  const parts = String(reference || '').split(':');
+  const suffix = parts.slice(1).join(':').trim();
+  return parts.length > 1 && suffix ? suffix : '';
+}
+
+function paymentRequestMatchKey(request) {
+  if (!request) return '';
+  return [
+    request.asset || '',
+    request.network || '',
+    request.recipient || '',
+    request.amount ?? '',
+    request.amount_sats ?? ''
+  ].map((part) => String(part).trim().toLowerCase()).join('|');
 }
 
 function base64UrlEncode(value) {
