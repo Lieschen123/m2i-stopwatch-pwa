@@ -384,7 +384,7 @@ function renderChallengeScreen() {
       <p class="muted">Starts ${new Date(challenge.startsAt).toLocaleDateString()} and closes ${new Date(challenge.endsAt).toLocaleString()}. A valid active day needs at least ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` and ${challenge.minDistanceKm} km; both minimums must be met` : ''}. Progress is collected locally on this device.</p>
       ${challenge.participants.length ? `<section class="roster"><p class="eyebrow">Local group roster</p>${challenge.participants.map((participant) => `<span>${escapeHtml(participant.displayName)}</span>`).join('')}<p class="fineprint">Roster is local. Participants confirm in your group chat; final bot sync uses success/fail attestations only.</p></section>` : '<p class="fineprint">No roster yet. Share the invite in your group chat; M2I does not host chat or participant messages.</p>'}
       ${renderChallengePaymentSummary(challenge)}
-      ${progress.isExpired ? `<p class="notice">Challenge window is closed. Review progress and copy private settlement if needed.</p>` : `<form class="stack" data-form="start-challenge-workout" data-challenge-id="${escapeHtml(challenge.id)}">
+      ${progress.isExpired ? `<p class="notice">Challenge window is closed. Review progress and copy challenge proof if needed.</p>` : `<form class="stack" data-form="start-challenge-workout" data-challenge-id="${escapeHtml(challenge.id)}">
         <label class="checkline privacy-check"><input type="checkbox" name="gpsEnabled" checked> Add local GPS aggregate distance</label>
         <p class="fineprint">Enable Safari Location: While Using + Precise Location. No route is stored or uploaded; route points stay in memory and are discarded at finish.</p>
         <label>Workout note, optional<textarea name="note" maxlength="280" rows="3" placeholder="Morning run"></textarea></label>
@@ -392,7 +392,7 @@ function renderChallengeScreen() {
       </form>`}
       <div class="actions-row">
         <button class="secondary" data-action="copy-invite">Copy invite</button>
-        <button class="secondary" data-action="copy-challenge-settlement">Copy private settlement</button>
+        <button class="secondary" data-action="copy-challenge-settlement">Copy challenge proof</button>
       </div>
       ${linked.length ? `<section class="stack"><h3>Local claims</h3>${linked.map((entry) => `<article class="history-item"><div><strong>${escapeHtml(entry.durationHuman)}</strong><span>${new Date(entry.stoppedAt).toLocaleString()}</span></div><span>${entry.claim.distance_km !== undefined ? `${entry.claim.distance_km.toFixed(3)} km` : 'duration only'}</span><button class="ghost" data-action="open-claim" data-claim-id="${escapeHtml(entry.id)}">Open</button></article>`).join('')}</section>` : '<p class="muted">No local workout claims yet.</p>'}
       <textarea class="json-output" readonly rows="8">${escapeHtml(JSON.stringify(settlement, null, 2))}</textarea>
@@ -430,11 +430,11 @@ function renderClaimScreen(entry) {
   renderShell(`
     <section class="panel stack">
       <h2>Signed claim</h2>
-      <p class="muted">Private settlement JSON. It includes your signed claim event and any local missed-challenge stake instructions. Public Nostr sharing is separate and redacted.</p>
+      <p class="muted">Challenge proof includes your signed workout claim, local progress, final review status, and any manual stake details. Share it only with your group or organizer. Public Nostr sharing is separate and redacted.</p>
       <div class="claim-summary"><strong>${escapeHtml(entry.challengeCode)}</strong><span>${entry.durationHuman}</span>${distance}<span>Kind ${CLAIM_KIND}</span></div>
       ${gpsOutcome}
       <textarea class="json-output" readonly rows="10">${escapeHtml(json)}</textarea>
-      <button class="primary" data-action="copy-event">Copy private settlement JSON</button>
+      <button class="primary" data-action="copy-event">Copy challenge proof</button>
       ${entry.claim.counterpart_npub ? `<button class="secondary" data-action="dm">Send NIP-17 DM</button>` : ''}
       <button class="secondary" data-action="public-share">Public share to Nostr</button>
       <p class="fineprint">Public share creates a separate redacted event. It excludes route, payment, counterpart, stake, and private note data.</p>

@@ -9,7 +9,7 @@ A static, browser-only stopwatch that signs workout duration claims with a local
 - Runs a timestamp-based stopwatch that survives tab backgrounding and can resume from stored active state.
 - Requests Wake Lock only after the user starts a workout.
 - Creates canonical JSON claims and signs them as Nostr addressable events.
-- Copies private settlement claims or wraps them as a NIP-17 DM to a counterpart npub.
+- Copies challenge proof JSON or wraps signed claim details as a NIP-17 DM to a counterpart npub.
 - Publishes only a separate redacted public share event when the user explicitly opts in.
 - Keeps local claim history for copy/resend.
 - Installs as an offline-capable PWA.
@@ -131,7 +131,7 @@ Expected:
 ## Privacy Checklist
 
 - Private key is never sent to relays or servers.
-- Private settlement claims are copied locally or sent by NIP-17 DM.
+- Challenge proof JSON is copied locally or signed claim details are sent by NIP-17 DM.
 - Public Nostr sharing is opt-in and redacted.
 - Optional GPS route points are memory-only and discarded at finish; only aggregate distance can be signed.
 - No cookies.

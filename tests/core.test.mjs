@@ -645,7 +645,7 @@ test('history entry preserves local USDt payment request', () => {
   assert.match(entry.paymentRequest.request_text, /Reference: USDT-HISTORY:/);
 });
 
-test('private settlement JSON retains visible 2 USDt manual request fields', () => {
+test('challenge proof JSON retains visible 2 USDt manual request fields', () => {
   const claim = createClaim({
     challengeCode: 'USDT-2-VISIBLE',
     startedAt: 1718708580000,
