@@ -3,7 +3,7 @@
 ## Stub
 - Started: 2026-06-26 12:39 Europe/Berlin
 - Task: Fix stake/payment reference consistency and deploy.
-- Status: In progress.
+- Status: Complete.
 
 ## Inspection
 - Verified report file with `ls -la` and `head` immediately after stub creation.
@@ -25,4 +25,11 @@
 - `npm test`: passed, 32 tests.
 - `npm run build:github-pages`: passed; generated `dist/assets/main.js` for base path `/m2i-stopwatch-pwa/`.
 - `git diff --check`: passed with no whitespace errors.
+- `git diff --cached --check`: passed before commit after trimming report EOF whitespace.
 - Public Nostr payment/stake redaction remains covered by existing public projection tests.
+
+## Commit And Deploy
+- Committed: `e0bd89f fix: keep stake references consistent`.
+- Pushed: `git push origin main` succeeded (`ec34a6a..e0bd89f main -> main`).
+- Deployed: `npx gh-pages -d dist` succeeded with output `Published`.
+- Preserved unrelated dirty files by staging only this task's source/test/dist/report files.
