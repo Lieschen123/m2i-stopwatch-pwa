@@ -153,6 +153,8 @@ Defer:
 
 ## Locked Coordination Model: External Group Chat + Final Bot Attestation
 
+Coordinator layer details now live in `STRATEGY-COORDINATOR-LAYER.md` and `SPEC-COORDINATOR-PHASE1.md`. The short version: signed M2I objects are canonical; Nostr, Hypercore/Pear, Keet, and payment state are transport or context only.
+
 M2I does not host chat in V1. The group talks where it already talks: Signal, WhatsApp, Telegram, Keet, or Nostr. The app creates invite text and proof/settlement payloads, but it does not become the social surface.
 
 Participants are names or optional npubs stored locally. Emails are intentionally avoided because they introduce PII, account expectations, delivery tracking, and backend requirements.

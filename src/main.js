@@ -1,6 +1,7 @@
 import './styles.css';
 import { CLAIM_KIND, DEFAULT_RELAYS } from './constants.js';
 import { createClaim, createHistoryEntry, createPublicClaimProjection } from './claim.js';
+import { createImportedProofRecord, createJoinEnvelope } from './envelope.js';
 import { formatDuration, shortNpub, clampText } from './format.js';
 import { generateNsec, keyInfoFromNsec, parseNpub, publishEvent, signClaimEvent, signPublicClaimEvent, createNip17DirectMessage } from './nostr.js';
 import { createSatsPaymentRequest, createUsdtPaymentRequest } from './payment.js';
@@ -370,22 +371,29 @@ function renderChallengeScreen() {
   const progress = computeChallengeProgress(challenge, history);
   const settlement = createChallengeSettlement({ challenge, history, progress });
   const linked = history.filter((entry) => entry.challengeId === challenge.id || entry.claim?.challenge_id === challenge.id);
+  const join = store.getChallengeJoin(challenge.id);
+  const importedProofs = store.getImportedProofs(challenge.id);
   const status = challengeStatus(progress);
   const settlementStatus = getChallengeSettlementStatus(progress);
   const dueLabel = settlementStatus.payment_due === null ? 'Pending final review' : (settlementStatus.payment_due ? 'Payment due' : 'No payment due');
+  const emptyRosterCopy = progress.isExpired
+    ? 'No participant roster was saved for this challenge.'
+    : 'Open group challenge. Share the invite in your group chat.';
   renderShell(`
     <section class="panel stack">
       <h2>${escapeHtml(challenge.code)}</h2>
       <div class="progress-grid">
         <div><strong>${progress.validActiveDays} / ${challenge.requiredActiveDays}</strong><span>valid days</span></div>
         <div><strong>${progress.totalWorkouts}</strong><span>local workouts</span></div>
+        <div><strong>${importedProofs.length}</strong><span>imported proofs</span></div>
         <div><strong>${progress.isExpired ? status : progress.daysRemaining}</strong><span>${progress.isExpired ? 'status' : 'days left'}</span></div>
       </div>
       <p class="notice"><strong>${escapeHtml(dueLabel)}.</strong> ${escapeHtml(settlementStatus.payment_reason)}</p>
       <p class="muted">Starts ${new Date(challenge.startsAt).toLocaleDateString()} and closes ${new Date(challenge.endsAt).toLocaleString()}. A valid active day needs at least ${challenge.minMinutesPerActiveDay} minutes${challenge.minDistanceKm ? ` and ${challenge.minDistanceKm} km; both minimums must be met` : ''}. Progress is collected locally on this device.</p>
-      ${challenge.participants.length ? `<section class="roster"><p class="eyebrow">Local group roster</p>${challenge.participants.map((participant) => `<span>${escapeHtml(participant.displayName)}</span>`).join('')}<p class="fineprint">Roster is local. Participants confirm in your group chat; final bot sync uses success/fail attestations only.</p></section>` : '<p class="fineprint">No roster yet. Share the invite in your group chat; M2I does not host chat or participant messages.</p>'}
+      ${renderJoinStatus(challenge, join)}
+      ${challenge.participants.length ? `<section class="roster"><p class="eyebrow">Local group roster</p>${challenge.participants.map((participant) => `<span>${escapeHtml(participant.displayName)}</span>`).join('')}<p class="fineprint">Roster is local. Participants confirm in your group chat; final bot sync uses success/fail attestations only.</p></section>` : `<p class="fineprint">${emptyRosterCopy}</p>`}
       ${renderChallengePaymentSummary(challenge)}
-      ${progress.isExpired ? `<p class="notice">Challenge window is closed. Review progress and copy challenge proof if needed.</p>` : `<form class="stack" data-form="start-challenge-workout" data-challenge-id="${escapeHtml(challenge.id)}">
+      ${progress.isExpired ? `<p class="notice">${progress.isComplete ? 'Challenge complete. Copy proof if you want to share it.' : 'Challenge window is closed. Review progress and copy challenge proof if needed.'}</p>` : `<form class="stack" data-form="start-challenge-workout" data-challenge-id="${escapeHtml(challenge.id)}">
         <label class="checkline privacy-check"><input type="checkbox" name="gpsEnabled" checked> Add local GPS aggregate distance</label>
         <p class="fineprint">Enable Safari Location: While Using + Precise Location. No route is stored or uploaded; route points stay in memory and are discarded at finish.</p>
         <label>Workout note, optional<textarea name="note" maxlength="280" rows="3" placeholder="Morning run"></textarea></label>
@@ -395,10 +403,37 @@ function renderChallengeScreen() {
         <button class="secondary" data-action="copy-invite">Copy invite</button>
         <button class="secondary" data-action="copy-challenge-settlement">Copy challenge proof</button>
       </div>
+      <form class="stack" data-form="import-proof" data-challenge-id="${escapeHtml(challenge.id)}">
+        <label>Import copied proof<textarea name="proofJson" rows="5" placeholder="Paste a copied M2I proof or envelope JSON"></textarea></label>
+        <button type="submit" class="secondary">Import proof</button>
+        <p class="fineprint">Imported proofs stay local on this device and do not change your signed workout history.</p>
+      </form>
       ${linked.length ? `<section class="stack"><h3>Local claims</h3>${linked.map((entry) => `<article class="history-item"><div><strong>${escapeHtml(entry.durationHuman)}</strong><span>${new Date(entry.stoppedAt).toLocaleString()}</span></div><span>${entry.claim.distance_km !== undefined ? `${entry.claim.distance_km.toFixed(3)} km` : 'duration only'}</span><button class="ghost" data-action="open-claim" data-claim-id="${escapeHtml(entry.id)}">Open</button></article>`).join('')}</section>` : '<p class="muted">No local workout claims yet.</p>'}
+      ${renderImportedProofs(importedProofs)}
       <textarea class="json-output" readonly rows="8">${escapeHtml(JSON.stringify(settlement, null, 2))}</textarea>
       <button class="ghost" data-action="home">Back</button>
     </section>`);
+}
+
+function renderJoinStatus(challenge, join) {
+  if (join) {
+    const name = join.participant?.displayName || join.participant?.npub || 'You';
+    return `<section class="join-card"><p><strong>${escapeHtml(name)}</strong> joined this challenge on ${new Date(join.joinedAt).toLocaleString()}.</p></section>`;
+  }
+  return `<section class="join-card"><p>You have not joined this challenge on this device.</p><button class="secondary" data-action="join-challenge" data-challenge-id="${escapeHtml(challenge.id)}">Join challenge</button></section>`;
+}
+
+function renderImportedProofs(importedProofs) {
+  if (!importedProofs.length) return '<p class="muted">No imported proofs yet.</p>';
+  return `
+    <section class="stack">
+      <h3>Imported proofs</h3>
+      ${importedProofs.map((proof) => `
+        <article class="history-item">
+          <div><strong>${escapeHtml(proof.summary?.label || 'Imported proof')}</strong><span>${new Date(proof.importedAt).toLocaleString()}</span></div>
+          <span>${escapeHtml(proof.format === 'm2i-envelope' ? 'Envelope' : 'Copied proof')}</span>
+        </article>`).join('')}
+    </section>`;
 }
 
 function renderChallengePaymentSummary(challenge) {
@@ -589,6 +624,18 @@ app.addEventListener('submit', async (event) => {
     if (!challenge) return setState({ message: 'Challenge not found.' });
     if (window.confirm('Start workout for this challenge?')) await beginWorkout(form, challenge);
   }
+  if (form.matches('[data-form="import-proof"]')) {
+    const challenge = store.getChallenge(form.dataset.challengeId);
+    if (!challenge) return setState({ message: 'Challenge not found.' });
+    try {
+      const data = new FormData(form);
+      const proof = createImportedProofRecord(data.get('proofJson'), { challengeId: challenge.id });
+      store.saveImportedProof(proof);
+      setState({ activeChallengeId: challenge.id, screen: 'challenge', message: 'Proof imported locally.' });
+    } catch (error) {
+      setState({ message: error.message });
+    }
+  }
 });
 
 app.addEventListener('change', (event) => {
@@ -648,6 +695,24 @@ app.addEventListener('click', async (event) => {
     const id = event.target.closest('[data-action]')?.dataset.challengeId;
     store.setActiveChallengeId(id);
     setState({ activeChallengeId: id, screen: 'challenge', message: '' });
+  }
+  if (action === 'join-challenge') {
+    const id = event.target.closest('[data-action]')?.dataset.challengeId;
+    const challenge = store.getChallenge(id);
+    if (!challenge) return setState({ message: 'Challenge not found.' });
+    const profile = store.getProfile();
+    const participant = {
+      displayName: profile.displayName || shortNpub(state.key.npub),
+      npub: state.key.npub
+    };
+    const joinedAt = Date.now();
+    store.saveChallengeJoin({
+      challengeId: challenge.id,
+      participant,
+      joinedAt,
+      envelope: createJoinEnvelope({ challenge, participant, createdAt: joinedAt })
+    });
+    setState({ activeChallengeId: challenge.id, screen: 'challenge', message: 'Joined locally on this device.' });
   }
   if (action === 'copy-invite') {
     const challenge = normalizeChallengePaymentRequests(store.getChallenge(state.activeChallengeId));

@@ -4,6 +4,7 @@ import { verifyEvent } from 'nostr-tools/pure';
 import { createChallengeInviteUrl, createChallengePlan, computeChallengeProgress, createChallengeSettlement, createInviteText, decodeChallengeInvite, formatDateInput, parseParticipants, workoutMeetsChallenge } from '../src/challenge.js';
 import { createClaim, createHistoryEntry, createPublicClaimProjection } from '../src/claim.js';
 import { canonicalJson, sha256Hex } from '../src/crypto.js';
+import { createChallengeEnvelope, createClaimEnvelope, createImportedProofRecord, createJoinEnvelope, parseEnvelope } from '../src/envelope.js';
 import { createGpsTracker, distanceMeters } from '../src/gps.js';
 import { generateNsec, keyInfoFromNsec, signClaimEvent, signPublicClaimEvent } from '../src/nostr.js';
 import { createSatsPaymentRequest, createUsdtPaymentRequest } from '../src/payment.js';
@@ -81,6 +82,127 @@ test('creates clickable challenge invite URL that can be imported locally', () =
   assert.doesNotMatch(inviteText, /payment request/i);
   assert.doesNotMatch(inviteText, /Manual team jar request/i);
   assert.doesNotMatch(inviteText, /without stakes/i);
+});
+
+test('creates deterministic challenge envelopes and parses them from JSON', () => {
+  const challenge = createChallengePlan({
+    code: 'COORDINATOR',
+    startDate: '2026-06-27',
+    durationDays: '7',
+    requiredActiveDays: '3',
+    minMinutesPerActiveDay: '20',
+    participantsText: 'Nono',
+    createdAt: 1782550000000
+  });
+  const one = createChallengeEnvelope(challenge);
+  const two = createChallengeEnvelope({ ...challenge });
+  const parsed = parseEnvelope(JSON.stringify(one));
+
+  assert.equal(one.type, 'm2i.challenge.v1');
+  assert.equal(one.envelope_hash, two.envelope_hash);
+  assert.equal(one.envelope_hash, sha256Hex(one.canonical_json));
+  assert.equal(parsed.envelope_hash, one.envelope_hash);
+  assert.equal(parsed.payload.challenge.id, challenge.id);
+});
+
+test('creates join and claim envelopes with challenge-scoped hashes', () => {
+  const challenge = createChallengePlan({
+    code: 'JOIN-CLAIM',
+    startDate: '2026-06-27',
+    durationDays: '2',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '10',
+    createdAt: 1782550000000
+  });
+  const join = createJoinEnvelope({
+    challenge,
+    participant: { displayName: 'Nono', npub: 'npub1test' },
+    createdAt: 1782550100000
+  });
+  const entry = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: challenge.startsAt,
+      stoppedAt: challenge.startsAt + 11 * 60 * 1000,
+      claimantNpub: 'npub1test'
+    }),
+    event: { id: 'claim-event', kind: 30316 }
+  });
+  const claimEnvelope = createClaimEnvelope({ historyEntry: entry, challenge });
+
+  assert.equal(parseEnvelope(join).payload.participant.displayName, 'Nono');
+  assert.equal(join.payload.challenge.id, challenge.id);
+  assert.match(join.payload.challenge_hash, /^[0-9a-f]{64}$/);
+  assert.equal(parseEnvelope(claimEnvelope).payload.historyEntry.id, 'claim-event');
+});
+
+test('parseEnvelope rejects invalid JSON and tampered hashes with clear errors', () => {
+  assert.throws(() => parseEnvelope('not json'), /valid JSON/);
+  assert.throws(() => parseEnvelope({ version: 1, type: 'm2i.unknown.v1', created_at: 1, payload: {}, envelope_hash: '0'.repeat(64) }), /type is not supported/);
+
+  const envelope = createChallengeEnvelope(createChallengePlan({
+    code: 'TAMPER',
+    startDate: '2026-06-27',
+    durationDays: '1',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '1',
+    createdAt: 1782550000000
+  }));
+  envelope.payload.challenge.code = 'CHANGED';
+  assert.throws(() => parseEnvelope(envelope), /hash does not match/);
+});
+
+test('storage keeps local join state and imported proofs by challenge', () => {
+  const store = createStorage(memoryStorage());
+  const challenge = createChallengePlan({
+    code: 'IMPORTS',
+    startDate: '2026-06-27',
+    durationDays: '2',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '10',
+    createdAt: 1782550000000
+  });
+  const join = {
+    challengeId: challenge.id,
+    participant: { displayName: 'Nono' },
+    joinedAt: 1782550200000,
+    envelope: createJoinEnvelope({ challenge, participant: { displayName: 'Nono' }, createdAt: 1782550200000 })
+  };
+  const proof = createImportedProofRecord(createChallengeEnvelope(challenge), {
+    challengeId: challenge.id,
+    importedAt: 1782550300000
+  });
+
+  store.saveChallengeJoin(join);
+  store.saveImportedProof(proof);
+
+  assert.equal(store.getChallengeJoin(challenge.id).participant.displayName, 'Nono');
+  assert.equal(store.getImportedProofs(challenge.id).length, 1);
+  assert.equal(store.getImportedProofs('other-challenge').length, 0);
+  assert.equal(store.getImportedProofs(challenge.id)[0].summary.kind, 'challenge');
+});
+
+test('imported proof records accept existing copied challenge proof JSON', () => {
+  const challenge = createChallengePlan({
+    code: 'LEGACY-PROOF',
+    startDate: '2026-06-27',
+    durationDays: '2',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '10',
+    createdAt: 1782550000000
+  });
+  const proof = createImportedProofRecord(JSON.stringify({
+    settlement_model: 'manual-group-settlement',
+    challenge,
+    challenge_result: 'open',
+    signed_claims: [{ signed_event: { id: 'event-one' } }]
+  }), { challengeId: challenge.id, importedAt: 1782550300000 });
+
+  assert.equal(proof.format, 'legacy-challenge-proof');
+  assert.equal(proof.challengeId, challenge.id);
+  assert.equal(proof.summary.localClaims, 1);
+  assert.equal(proof.summary.result, 'open');
 });
 
 test('challenge invite text states no stake when no stake is configured', () => {

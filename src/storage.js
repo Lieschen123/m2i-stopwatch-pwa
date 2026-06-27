@@ -63,6 +63,30 @@ export function createStorage(storage = globalThis.localStorage) {
       storage.removeItem(STORAGE_KEYS.challenges);
       storage.removeItem(STORAGE_KEYS.activeChallenge);
     },
+    getChallengeJoins() {
+      const joins = readJson(storage, STORAGE_KEYS.challengeJoins, []);
+      return Array.isArray(joins) ? joins : [];
+    },
+    getChallengeJoin(challengeId) {
+      return this.getChallengeJoins().find((join) => join.challengeId === challengeId) || null;
+    },
+    saveChallengeJoin(join) {
+      const existing = this.getChallengeJoins().filter((item) => item.challengeId !== join.challengeId);
+      const next = [join, ...existing].slice(0, 100);
+      writeJson(storage, STORAGE_KEYS.challengeJoins, next);
+      return join;
+    },
+    getImportedProofs(challengeId = '') {
+      const proofs = readJson(storage, STORAGE_KEYS.importedProofs, []);
+      const list = Array.isArray(proofs) ? proofs : [];
+      return challengeId ? list.filter((proof) => proof.challengeId === challengeId) : list;
+    },
+    saveImportedProof(proof) {
+      const existing = this.getImportedProofs().filter((item) => item.id !== proof.id);
+      const next = [proof, ...existing].slice(0, 200);
+      writeJson(storage, STORAGE_KEYS.importedProofs, next);
+      return proof;
+    },
     getHistory() {
       const history = readJson(storage, STORAGE_KEYS.history, []);
       return Array.isArray(history) ? history : [];

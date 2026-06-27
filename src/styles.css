@@ -100,7 +100,7 @@ h2 { font-size: 1.35rem; line-height: 1.2; margin-bottom: 14px; }
 .challenge-card p { color: #3f626b; line-height: 1.35; }
 .progress-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 .progress-grid div {
@@ -120,6 +120,17 @@ h2 { font-size: 1.35rem; line-height: 1.2; margin-bottom: 14px; }
   background: #ffffff;
   font-weight: 750;
 }
+.join-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #8ee8d8;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+.join-card p { color: #315966; line-height: 1.4; }
 .identity-strip {
   display: flex;
   justify-content: space-between;
@@ -245,5 +256,6 @@ h2 { font-size: 1.35rem; line-height: 1.2; margin-bottom: 14px; }
   .panel { padding: 16px; }
   .gps-details dl, .gps-claim dl { grid-template-columns: 1fr; }
   .form-grid, .challenge-card, .progress-grid, .claim-summary, .history-item { grid-template-columns: 1fr; }
+  .join-card { align-items: stretch; flex-direction: column; }
   .timer { font-size: clamp(3.5rem, 19vw, 6rem); }
 }

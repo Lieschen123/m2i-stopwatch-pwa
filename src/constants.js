@@ -14,6 +14,8 @@ export const STORAGE_KEYS = {
   activeWorkout: 'm2i.activeWorkout.v1',
   challenges: 'm2i.challenges.v1',
   activeChallenge: 'm2i.activeChallenge.v1',
+  challengeJoins: 'm2i.challengeJoins.v1',
+  importedProofs: 'm2i.importedProofs.v1',
   history: 'm2i.history.v1',
   relays: 'm2i.relays.v1'
 };
