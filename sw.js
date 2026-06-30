@@ -1,4 +1,4 @@
-const CACHE_NAME = 'm2i-stopwatch-v1-20260630-paycopy';
+const CACHE_NAME = 'm2i-stopwatch-v1-20260630-repeat';
 const scopePath = new URL(self.registration.scope).pathname;
 const scopedPath = (path) => `${scopePath}${path.replace(/^\/+/, '')}`;
 const APP_SHELL = [scopePath, scopedPath('index.html'), scopedPath('manifest.webmanifest'), scopedPath('icon.svg')];
