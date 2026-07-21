@@ -488,9 +488,10 @@ function renderHomeScreen() {
         <label>Payment URI, optional<input name="satsPaymentUri" autocomplete="off" spellcheck="false" placeholder="lightning:lnurl... or bitcoin:bc1..."></label>
         <label>Manual instructions, optional<textarea name="satsInstructions" maxlength="800" rows="3" placeholder="Only due from your own wallet if final review says the challenge was missed."></textarea></label>
       </fieldset>
-      <button type="submit" class="primary">Create challenge</button>
+      <button type="submit" class="primary" data-create-challenge-button>Create movement invite</button>
     </form>
     <nav class="actions-row"><button class="secondary" data-action="history">History</button></nav>`);
+  toggleActivityFields(app.querySelector('[data-form="create-challenge"]'));
 }
 
 function renderChallengeCard(challenge, history) {
@@ -1239,14 +1240,18 @@ function toggleActivityFields(form) {
   const isBurpee = value === 'burpees';
   form.querySelectorAll('[data-movement-fields]').forEach((node) => {
     node.hidden = isBurpee;
+    node.setAttribute('aria-hidden', String(isBurpee));
   });
   form.querySelectorAll('[data-burpee-fields]').forEach((node) => {
     node.hidden = !isBurpee;
+    node.setAttribute('aria-hidden', String(!isBurpee));
   });
   const movementHint = form.querySelector('[data-activity-hint-movement]');
   const burpeeHint = form.querySelector('[data-activity-hint-burpees]');
   if (movementHint) movementHint.hidden = isBurpee;
   if (burpeeHint) burpeeHint.hidden = !isBurpee;
+  const button = form.querySelector('[data-create-challenge-button]');
+  if (button) button.textContent = isBurpee ? 'Create burpee invite' : 'Create movement invite';
 }
 
 app.addEventListener('click', async (event) => {
