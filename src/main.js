@@ -31,8 +31,10 @@ let state = {
   message: ''
 };
 let timerId = null;
+let workoutMusic = null;
 let spokenWorkoutCueId = '';
 const spokenWorkoutCues = new Set();
+const WORKOUT_MUSIC_PATH = 'audio/multiplyhero-workout-music.mp3';
 
 const SETTLEMENT_STATUS_OPTIONS = [
   {
@@ -112,6 +114,10 @@ function appBaseUrl() {
   return new URL(window.location.pathname, window.location.origin).toString();
 }
 
+function assetUrl(path) {
+  return new URL(path.replace(/^\/+/, ''), appBaseUrl()).toString();
+}
+
 function startTimer() {
   stopTimer();
   timerId = window.setInterval(() => {
@@ -172,6 +178,31 @@ function startBurpeeVoiceCues(workout) {
   resetBurpeeCueState(workout);
   spokenWorkoutCues.add('start');
   return speakCue(`Go. ${spokenDuration(workout.targetSeconds)}.`);
+}
+
+function startWorkoutMusic(workout) {
+  stopWorkoutMusic();
+  if (!workout?.musicEnabled) return false;
+  try {
+    workoutMusic = new Audio(assetUrl(WORKOUT_MUSIC_PATH));
+    workoutMusic.loop = true;
+    workoutMusic.volume = 0.16;
+    const playPromise = workoutMusic.play();
+    if (playPromise?.catch) playPromise.catch(() => stopWorkoutMusic());
+    return true;
+  } catch {
+    workoutMusic = null;
+    return false;
+  }
+}
+
+function stopWorkoutMusic() {
+  if (!workoutMusic) return;
+  try {
+    workoutMusic.pause();
+    workoutMusic.currentTime = 0;
+  } catch {}
+  workoutMusic = null;
 }
 
 function spokenDuration(seconds) {
@@ -265,6 +296,7 @@ async function beginWorkout(form, challenge = null) {
     targetMinutes: isBurpee ? undefined : (challenge ? challenge.minMinutesPerActiveDay : data.get('targetMinutes')),
     targetSeconds: isBurpee ? (challenge?.durationSeconds || BURPEE_DEFAULT_DURATION_SECONDS) : undefined,
     activityType: isBurpee ? 'burpees' : 'movement',
+    musicEnabled: isBurpee && data.get('musicEnabled') === 'on',
     counterpartNpub,
     note: clampText(data.get('note'), 280),
     gpsEnabled: !isBurpee && data.get('gpsEnabled') === 'on',
@@ -278,6 +310,7 @@ async function beginWorkout(form, challenge = null) {
   });
   store.setActiveWorkout(workout);
   const voiceStarted = workout.activityType === 'burpees' ? startBurpeeVoiceCues(workout) : false;
+  const musicStarted = startWorkoutMusic(workout);
   const wakeLock = await requestWakeLock();
   let gpsTracker = null;
   let message = '';
@@ -291,6 +324,8 @@ async function beginWorkout(form, challenge = null) {
   }
   if (workout.activityType === 'burpees' && !voiceStarted) {
     message = 'Voice cues could not start in this browser. Keep the screen timer visible.';
+  } else if (workout.musicEnabled && !musicStarted) {
+    message = 'Music could not start in this browser. Timer and voice cues still work.';
   }
   setState({ activeWorkout: workout, wakeLock, gpsTracker, gpsSummary: null, screen: 'workout', message });
   startTimer();
@@ -358,6 +393,7 @@ async function finishWorkout() {
   store.addHistory(entry);
   store.clearActiveWorkout();
   if (state.wakeLock) await state.wakeLock.release().catch(() => {});
+  stopWorkoutMusic();
   stopTimer();
   setState({
     activeWorkout: null,
@@ -611,6 +647,7 @@ function renderBurpeeStartForm(challenge) {
     <form class="stack" data-form="start-challenge-workout" data-challenge-id="${escapeHtml(challenge.id)}">
       <p class="notice"><strong>Burpee round.</strong> Full ${escapeHtml(window)}. At the end, enter your reps.</p>
       <p class="fineprint">Signed self-attestation. The receipt proves who claimed what and when. It does not prove the movement objectively happened.</p>
+      <label class="checkline"><input type="checkbox" name="musicEnabled" checked> Play motivation music</label>
       <label>Workout note, optional<textarea name="note" maxlength="280" rows="3" placeholder="Living room"></textarea></label>
       <button type="submit" class="primary">Start burpee round</button>
     </form>`;
@@ -996,7 +1033,7 @@ function renderWorkoutScreen() {
         <div class="target distance" data-distance-status>Waiting for local GPS estimate...</div>
         <div class="gps-details" data-gps-details></div>
       ` : ''}
-      ${isBurpee ? '<p class="fineprint">Daily round: 2:30 default. Voice cues announce start, 1 minute left, 30 seconds, 10 seconds, and time.</p>' : ''}
+      ${isBurpee ? `<p class="fineprint">Daily round: 2:30 default. Voice cues announce start, 1 minute left, 30 seconds, 10 seconds, and time.${state.activeWorkout.musicEnabled ? ' Motivation music is playing softly in the background.' : ''}</p>` : ''}
       <button class="danger" data-action="finish">${isBurpee ? 'Finish burpee round' : 'Finish challenge'}</button>
     </section>`);
   startTimer();
@@ -1496,6 +1533,7 @@ app.addEventListener('click', async (event) => {
   if (action === 'forget-key' && window.confirm('Forget this browser key and local active workout?')) {
     store.clearSecret();
     store.clearActiveWorkout();
+    stopWorkoutMusic();
     setState({ key: null, activeWorkout: null, screen: 'key', message: 'Local key removed.' });
   }
 });

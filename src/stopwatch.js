@@ -15,6 +15,7 @@ export function createWorkout({
   satsInstructions,
   activityType,
   targetSeconds: explicitTargetSeconds,
+  musicEnabled = false,
   startedAt = Date.now()
 }) {
   const targetSeconds = explicitTargetSeconds > 0
@@ -26,6 +27,7 @@ export function createWorkout({
     participant: participant || null,
     targetSeconds,
     activityType: activityType === 'burpees' ? 'burpees' : 'movement',
+    musicEnabled: Boolean(musicEnabled),
     counterpartNpub: counterpartNpub || '',
     note: note || '',
     gpsEnabled: Boolean(gpsEnabled),
