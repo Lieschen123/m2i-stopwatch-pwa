@@ -176,7 +176,7 @@ function createChallengeFromForm(form) {
     code,
     startDate: data.get('startDate'),
     durationDays: data.get('durationDays'),
-    requiredActiveDays: data.get('requiredActiveDays'),
+    requiredActiveDays: activityType === 'burpees' ? data.get('burpeeRequiredActiveDays') : data.get('requiredActiveDays'),
     minMinutesPerActiveDay: data.get('minMinutesPerActiveDay'),
     minDistanceKm: data.get('minDistanceKm'),
     participantsText: clampText(data.get('participantsText'), 1200),
@@ -469,6 +469,7 @@ function renderHomeScreen() {
       <label data-movement-fields>Distance goal, optional<input name="minDistanceKm" inputmode="decimal" type="number" min="0" step="0.1" placeholder="off"></label>
       <p class="fineprint" data-movement-fields>Leave empty if minutes are enough. If set, each active day must meet both minimum minutes and distance.</p>
       <div class="form-grid" data-burpee-fields hidden>
+        <label>Required burpee days<input name="burpeeRequiredActiveDays" inputmode="numeric" type="number" min="1" step="1" value="14"></label>
         <label>Burpee window, minutes<input name="burpeeDurationMinutes" inputmode="numeric" type="number" min="1" step="1" value="7"></label>
         <label>Minimum reps, optional<input name="burpeeMinReps" inputmode="numeric" type="number" min="0" step="1" placeholder="off"></label>
       </div>
@@ -528,7 +529,8 @@ function challengeRulesCopy(challenge) {
   if (isBurpeeChallenge(challenge)) {
     const window = burpeeWindowLabel(challenge);
     const minReps = challenge.minReps ? ` at least ${challenge.minReps} reps and` : '';
-    return `Starts ${new Date(challenge.startsAt).toLocaleDateString()} and closes ${new Date(challenge.endsAt).toLocaleString()}. A valid burpee round needs${minReps} a full ${window}. Reps are self-attested and signed locally on this device.`;
+    const dayLabel = challenge.requiredActiveDays === 1 ? '1 valid burpee day' : `${challenge.requiredActiveDays} valid burpee days`;
+    return `Starts ${new Date(challenge.startsAt).toLocaleDateString()} and closes ${new Date(challenge.endsAt).toLocaleString()}. Goal: ${dayLabel}. A valid burpee round needs${minReps} a full ${window}. Reps are self-attested and signed locally on this device.`;
   }
   return `Starts ${new Date(challenge.startsAt).toLocaleDateString()} and closes ${new Date(challenge.endsAt).toLocaleString()}. A valid active day needs at least ${challenge.minMinutesPerActiveDay} minutes plus ${challenge.minDistanceKm ? `${challenge.minDistanceKm} km` : `${requiredChallengeMovementMeters(challenge)} m`} of accepted local GPS aggregate movement. Progress is collected locally on this device.`;
 }
