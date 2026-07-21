@@ -34,6 +34,7 @@ let timerId = null;
 let workoutMusic = null;
 let spokenWorkoutCueId = '';
 const spokenWorkoutCues = new Set();
+const autoFinishWorkoutIds = new Set();
 const WORKOUT_MUSIC_PATH = 'audio/multiplyhero-workout-music.mp3';
 
 const SETTLEMENT_STATUS_OPTIONS = [
@@ -147,6 +148,7 @@ function updateWorkoutClock() {
     else target.textContent = `${formatDuration(Math.abs(delta) * 1000)} to target`;
   }
   maybeSpeakBurpeeCue(state.activeWorkout, now);
+  maybeAutoFinishBurpeeWorkout(state.activeWorkout, now);
   if (distance && state.gpsTracker) {
     const status = state.gpsTracker.status();
     distance.textContent = renderGpsDistanceText(status);
@@ -219,9 +221,13 @@ function spokenDuration(seconds) {
   return `${remainder} seconds`;
 }
 
+function burpeeWorkoutId(workout) {
+  return `${workout?.challengeId || workout?.challengeCode}:${workout?.startedAt}`;
+}
+
 function maybeSpeakBurpeeCue(workout, now = Date.now()) {
   if (!workout || workout.activityType !== 'burpees' || !workout.targetSeconds) return;
-  const workoutCueId = `${workout.challengeId || workout.challengeCode}:${workout.startedAt}`;
+  const workoutCueId = burpeeWorkoutId(workout);
   if (spokenWorkoutCueId !== workoutCueId) {
     spokenWorkoutCueId = workoutCueId;
     spokenWorkoutCues.clear();
@@ -239,6 +245,19 @@ function maybeSpeakBurpeeCue(workout, now = Date.now()) {
   if (!cue) return;
   spokenWorkoutCues.add(cue.key);
   speakCue(cue.text);
+}
+
+function maybeAutoFinishBurpeeWorkout(workout, now = Date.now()) {
+  if (!workout || workout.activityType !== 'burpees' || !workout.targetSeconds) return;
+  if (elapsedMs(workout, now) < workout.targetSeconds * 1000) return;
+  const id = burpeeWorkoutId(workout);
+  if (autoFinishWorkoutIds.has(id)) return;
+  autoFinishWorkoutIds.add(id);
+  window.setTimeout(() => {
+    const active = state.activeWorkout;
+    if (!active || burpeeWorkoutId(active) !== id || state.screen !== 'workout') return;
+    finishWorkout();
+  }, 250);
 }
 
 function createChallengeFromForm(form) {
@@ -1038,8 +1057,8 @@ function renderWorkoutScreen() {
         <div class="target distance" data-distance-status>Waiting for local GPS estimate...</div>
         <div class="gps-details" data-gps-details></div>
       ` : ''}
-      ${isBurpee ? `<p class="fineprint">Daily round: 2:30 default. Voice cues announce start, 1 minute left, 30 seconds, 10 seconds, and “Time. Stop now. Enter your reps.”${state.activeWorkout.musicEnabled ? ' Motivation music is playing softly in the background.' : ''}</p>` : ''}
-      <button class="danger" data-action="finish">${isBurpee ? 'Finish burpee round' : 'Finish challenge'}</button>
+      ${isBurpee ? `<p class="fineprint">Daily round: 2:30 default. Voice cues announce start, 1 minute left, 30 seconds, 10 seconds, and “Time. Stop now. Enter your reps.” Then the reps prompt opens automatically.${state.activeWorkout.musicEnabled ? ' Motivation music is playing softly in the background.' : ''}</p>` : ''}
+      <button class="danger" data-action="finish">${isBurpee ? 'Stop now & enter reps' : 'Finish challenge'}</button>
     </section>`);
   startTimer();
   updateWorkoutClock();
@@ -1390,7 +1409,10 @@ app.addEventListener('click', async (event) => {
     store.setSecret(info.nsec);
     setState({ key: info, generatedNsec: '', screen: 'home', message: `You are ${shortNpub(info.npub)}.` });
   }
-  if (action === 'finish' && window.confirm('Finish challenge? This will create your signed claim.')) await finishWorkout();
+  if (action === 'finish') {
+    if (state.activeWorkout?.activityType === 'burpees') await finishWorkout();
+    else if (window.confirm('Finish challenge? This will create your signed claim.')) await finishWorkout();
+  }
   if (action === 'copy-event' && state.lastSigned) {
     const settlement = state.lastSigned.privateSettlement || { settlement_model: 'manual-private-settlement', signed_event: state.lastSigned.event };
     copy(JSON.stringify(settlement, null, 2));
