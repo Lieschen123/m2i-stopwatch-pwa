@@ -90,6 +90,30 @@
 
 ---
 
+## Variante D — Sovereignty + konkret (empfohlen 2026-07-21)
+
+> Du bist die Erste, an die ich denke, weil du sowas wirklich durchziehen könntest.
+>
+> Ich baue gerade Move2Improve. Kein Fitness-Tracker, eher ein Commitment-Device: zwei Leute einigen sich auf eine Challenge, setzen einen kleinen Einsatz, und halten sich gegenseitig dran.
+>
+> Prinzip: Ich von heute will, dass ich von morgen etwas tut. Alleine ist das schwerer. Mit einem Buddy wird es realer.
+>
+> Was du machen würdest:
+> • Challenge aussuchen, die dich reizt, z.B. 10 Läufe in 30 Tagen oder Burpees oder etwas anderes
+> • Alias wählen, wenn du keinen echten Namen nutzen willst
+> • Kleinen Einsatz setzen, paar Euro / sats / USDt, regeln wir einfach
+> • PWA aufs Handy, keine Store-App
+> • Nach jedem Workout kurz starten + stoppen
+> • 1x pro Woche Status im Chat teilen
+>
+> Wichtig: Deine Körperdaten bleiben bei dir. Kein Video, kein Tracker-Cloud-Zwang, kein Überwachungsding. Du teilst nur den signierten Nachweis, den du teilen willst.
+>
+> Wenn du es schaffst, bleibt dein Einsatz bei dir. Wenn nicht, wandert er in unsere Team-Kasse, und wir entscheiden wofür.
+>
+> Wenn es nach zwei Wochen stumpf ist, sagen wir es ehrlich und stoppen. Kein Druck.
+>
+> Bock auf eine kleine echte Testrunde?
+
 ## Anti-Templates (was ich NICHT sage)
 
 - ❌ "Ich hab hier eine App die..." (macht mich zum Verkäufer)
