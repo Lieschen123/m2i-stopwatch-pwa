@@ -9,7 +9,7 @@ export const ACTIVITY_BURPEES = 'burpees';
 export const SCORING_DURATION = 'duration';
 export const SCORING_REPS_FOR_TIME = 'reps_for_time';
 export const PROOF_SELF_ATTESTED = 'self_attested';
-export const BURPEE_DEFAULT_DURATION_SECONDS = 7 * 60;
+export const BURPEE_DEFAULT_DURATION_SECONDS = 150;
 
 export function isBurpeeChallenge(challenge) {
   return challenge?.activityType === ACTIVITY_BURPEES;

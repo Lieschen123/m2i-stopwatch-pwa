@@ -31,6 +31,8 @@ let state = {
   message: ''
 };
 let timerId = null;
+let spokenWorkoutCueId = '';
+const spokenWorkoutCues = new Set();
 
 const SETTLEMENT_STATUS_OPTIONS = [
   {
@@ -138,11 +140,56 @@ function updateWorkoutClock() {
     else if (delta >= 0) target.textContent = `Target reached +${formatDuration(delta * 1000)}`;
     else target.textContent = `${formatDuration(Math.abs(delta) * 1000)} to target`;
   }
+  maybeSpeakBurpeeCue(state.activeWorkout, now);
   if (distance && state.gpsTracker) {
     const status = state.gpsTracker.status();
     distance.textContent = renderGpsDistanceText(status);
     if (gpsDetails) gpsDetails.innerHTML = renderGpsDiagnostics(status);
   }
+}
+
+function speakCue(text) {
+  if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return;
+  try {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 1;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    // Voice cues are optional. The timer remains the source of truth.
+  }
+}
+
+function spokenDuration(seconds) {
+  const whole = Math.max(0, Math.round(Number(seconds) || 0));
+  const minutes = Math.floor(whole / 60);
+  const remainder = whole % 60;
+  if (minutes && remainder) return `${minutes} minute${minutes === 1 ? '' : 's'} ${remainder} seconds`;
+  if (minutes) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  return `${remainder} seconds`;
+}
+
+function maybeSpeakBurpeeCue(workout, now = Date.now()) {
+  if (!workout || workout.activityType !== 'burpees' || !workout.targetSeconds) return;
+  const workoutCueId = `${workout.challengeId || workout.challengeCode}:${workout.startedAt}`;
+  if (spokenWorkoutCueId !== workoutCueId) {
+    spokenWorkoutCueId = workoutCueId;
+    spokenWorkoutCues.clear();
+  }
+  const elapsedSeconds = Math.floor(elapsedMs(workout, now) / 1000);
+  const remaining = workout.targetSeconds - elapsedSeconds;
+  const cues = [
+    { key: 'start', when: workout.targetSeconds, text: `Go. ${spokenDuration(workout.targetSeconds)}.` },
+    { key: 'one-minute', when: 60, text: 'One minute left.' },
+    { key: 'thirty', when: 30, text: 'Thirty seconds.' },
+    { key: 'ten', when: 10, text: 'Ten seconds.' },
+    { key: 'time', when: 0, text: 'Time.' }
+  ];
+  const cue = cues.find((item) => remaining <= item.when && !spokenWorkoutCues.has(item.key));
+  if (!cue) return;
+  spokenWorkoutCues.add(cue.key);
+  speakCue(cue.text);
 }
 
 function createChallengeFromForm(form) {
@@ -470,7 +517,7 @@ function renderHomeScreen() {
       <p class="fineprint" data-movement-fields>Leave empty if minutes are enough. If set, each active day must meet both minimum minutes and distance.</p>
       <div class="form-grid" data-burpee-fields hidden>
         <label>Required burpee days<input name="burpeeRequiredActiveDays" inputmode="numeric" type="number" min="1" step="1" value="14"></label>
-        <label>Burpee window, minutes<input name="burpeeDurationMinutes" inputmode="numeric" type="number" min="1" step="1" value="7"></label>
+        <label>Burpee window, minutes<input name="burpeeDurationMinutes" inputmode="decimal" type="number" min="0.5" step="0.5" value="2.5"></label>
         <label>Minimum reps, optional<input name="burpeeMinReps" inputmode="numeric" type="number" min="0" step="1" placeholder="off"></label>
       </div>
       <label>Group members, optional<textarea name="participantsText" maxlength="1200" rows="4" placeholder="Names only, one per line\nNono\nAlex\nMia"></textarea></label>
@@ -926,7 +973,7 @@ function renderWorkoutScreen() {
         <div class="target distance" data-distance-status>Waiting for local GPS estimate...</div>
         <div class="gps-details" data-gps-details></div>
       ` : ''}
-      ${isBurpee ? '<p class="fineprint">Full window recommended. Finish opens the reps prompt.</p>' : ''}
+      ${isBurpee ? '<p class="fineprint">Daily round: 2:30 default. Voice cues announce start, 1 minute left, 30 seconds, 10 seconds, and time.</p>' : ''}
       <button class="danger" data-action="finish">${isBurpee ? 'Finish burpee round' : 'Finish challenge'}</button>
     </section>`);
   startTimer();
