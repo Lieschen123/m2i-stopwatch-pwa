@@ -461,8 +461,8 @@ function summarizePaymentRequests(paymentRequests = []) {
 }
 
 export function createInviteText(challenge, appUrl = '') {
-  const inviteUrl = createChallengeInviteUrl(challenge, appUrl);
   const inviteToken = encodeChallengeInvite(challenge);
+  const appLink = appUrl ? new URL(appUrl).toString() : '';
   const burpeeLabel = challenge.requiredActiveDays === 1 ? '1 valid burpee day' : `${challenge.requiredActiveDays} valid burpee days`;
   const burpeeWindow = challenge.durationSeconds
     ? (challenge.durationSeconds % 60 === 0 ? `${challenge.durationSeconds / 60} min` : `${challenge.durationSeconds} sec`)
@@ -476,13 +476,12 @@ export function createInviteText(challenge, appUrl = '') {
     : [`${challenge.durationDays} days, ${challenge.requiredActiveDays} active days required`, `Minimum per active day: ${challenge.minMinutesPerActiveDay} ${minuteLabel}${movementLabel}`];
   const lines = [
     `Move2Improve challenge: ${challenge.code}`,
-    inviteUrl ? `Open / join: ${inviteUrl}` : '',
+    appLink ? `Open app: ${appLink}` : '',
     ...ruleLines,
     `Group members listed locally: ${challenge.participants.length || 'open group'}`,
     summarizePaymentRequests(challenge.paymentRequests),
     'Share this invite in your existing group chat. M2I does not host chat or participant messages.',
-    'Opening the link imports the challenge rules locally on that device.',
-    'If the link breaks, open the app and paste this invite token into Import challenge invite:',
+    'Open the app, then paste this invite token into Import Challenge:',
     inviteToken,
     'Stake is only due if the challenge is missed after final review. If complete, no payment is due.',
     'M2I never holds funds, pays automatically, or monitors settlement.'
