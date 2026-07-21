@@ -149,16 +149,29 @@ function updateWorkoutClock() {
 }
 
 function speakCue(text) {
-  if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return;
+  if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return false;
   try {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'en-US';
     utterance.rate = 1;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
+    return true;
   } catch {
     // Voice cues are optional. The timer remains the source of truth.
+    return false;
   }
+}
+
+function resetBurpeeCueState(workout) {
+  spokenWorkoutCueId = `${workout.challengeId || workout.challengeCode}:${workout.startedAt}`;
+  spokenWorkoutCues.clear();
+}
+
+function startBurpeeVoiceCues(workout) {
+  resetBurpeeCueState(workout);
+  spokenWorkoutCues.add('start');
+  return speakCue(`Go. ${spokenDuration(workout.targetSeconds)}.`);
 }
 
 function spokenDuration(seconds) {
@@ -264,6 +277,7 @@ async function beginWorkout(form, challenge = null) {
     satsInstructions: satsRequest?.instruction || clampText(data.get('satsInstructions'), 800)
   });
   store.setActiveWorkout(workout);
+  const voiceStarted = workout.activityType === 'burpees' ? startBurpeeVoiceCues(workout) : false;
   const wakeLock = await requestWakeLock();
   let gpsTracker = null;
   let message = '';
@@ -274,6 +288,9 @@ async function beginWorkout(form, challenge = null) {
     message = started
       ? 'GPS watch requested. Waiting for the first accepted sample; route points stay in memory and are discarded at finish.'
       : `GPS did not start: ${gpsStartBlocker(status)} Continuing stopwatch-only.`;
+  }
+  if (workout.activityType === 'burpees' && !voiceStarted) {
+    message = 'Voice cues could not start in this browser. Keep the screen timer visible.';
   }
   setState({ activeWorkout: workout, wakeLock, gpsTracker, gpsSummary: null, screen: 'workout', message });
   startTimer();

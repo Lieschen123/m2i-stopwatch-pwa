@@ -169,6 +169,48 @@ test('burpee challenge validity and ranking use reps-for-time rules', () => {
   assert.equal(ranked[0].claim.duration_seconds, 420);
 });
 
+test('multiple burpee rounds on one day count as one valid day', () => {
+  const challenge = createChallengePlan({
+    code: 'daily burpees',
+    startDate: '2026-07-21',
+    durationDays: '14',
+    requiredActiveDays: '14',
+    activityType: 'burpees',
+    durationSeconds: 150,
+    participantsText: 'Nono',
+    createdAt: 1784620000000
+  });
+  const first = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: challenge.startsAt + 8 * 60 * 60 * 1000,
+      stoppedAt: challenge.startsAt + 8 * 60 * 60 * 1000 + 150 * 1000,
+      claimantDisplayName: 'Nono',
+      activity: { activityType: 'burpees', repCount: 20 }
+    }),
+    event: { id: 'burpees-am' }
+  });
+  const second = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: challenge.startsAt + 18 * 60 * 60 * 1000,
+      stoppedAt: challenge.startsAt + 18 * 60 * 60 * 1000 + 150 * 1000,
+      claimantDisplayName: 'Nono',
+      activity: { activityType: 'burpees', repCount: 30 }
+    }),
+    event: { id: 'burpees-pm' }
+  });
+
+  const progress = computeChallengeProgress(challenge, [first, second], challenge.startsAt + 24 * 60 * 60 * 1000);
+  assert.equal(progress.totalWorkouts, 2);
+  assert.equal(progress.validWorkouts, 2);
+  assert.equal(progress.validActiveDays, 1);
+  assert.equal(progress.participantProgress[0].validActiveDays, 1);
+  assert.equal(progress.participantProgress[0].validWorkouts, 2);
+});
+
 test('creates challenge invite URL and chat-safe invite token that can be imported locally', () => {
   const challenge = createChallengePlan({
     code: 'FLOW TEST',
