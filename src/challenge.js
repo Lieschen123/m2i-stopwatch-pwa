@@ -435,6 +435,21 @@ export function createChallengeInviteUrl(challenge, appUrl) {
   return url.toString();
 }
 
+export function extractChallengeInviteToken(input = '') {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+  try {
+    const urlMatch = raw.match(/https?:\/\/\S+/);
+    const url = new URL(urlMatch ? urlMatch[0] : raw);
+    const token = new URLSearchParams(url.hash.replace(/^#/, '')).get('challenge');
+    if (token) return token.trim();
+  } catch {}
+  const hashMatch = raw.match(/(?:^|[#?&\s])challenge=([A-Za-z0-9_-]+)/);
+  if (hashMatch?.[1]) return hashMatch[1].trim();
+  const tokenMatch = raw.match(/[A-Za-z0-9_-]{80,}/);
+  return tokenMatch?.[0]?.trim() || '';
+}
+
 function summarizePaymentRequests(paymentRequests = []) {
   if (!paymentRequests.length) return 'No stake configured.';
   const summaries = paymentRequests.map((request) => {
@@ -447,19 +462,28 @@ function summarizePaymentRequests(paymentRequests = []) {
 
 export function createInviteText(challenge, appUrl = '') {
   const inviteUrl = createChallengeInviteUrl(challenge, appUrl);
+  const inviteToken = encodeChallengeInvite(challenge);
+  const burpeeLabel = challenge.requiredActiveDays === 1 ? '1 valid burpee day' : `${challenge.requiredActiveDays} valid burpee days`;
+  const burpeeWindow = challenge.durationSeconds
+    ? (challenge.durationSeconds % 60 === 0 ? `${challenge.durationSeconds / 60} min` : `${challenge.durationSeconds} sec`)
+    : 'burpee window';
   const minuteLabel = challenge.minMinutesPerActiveDay === 1 ? 'minute' : 'minutes';
   const movementLabel = challenge.minDistanceKm
     ? ` + ${challenge.minDistanceKm} km GPS aggregate distance`
     : ` + at least ${requiredChallengeMovementMeters(challenge)} m GPS aggregate movement`;
+  const ruleLines = isBurpeeChallenge(challenge)
+    ? [`${challenge.durationDays} days, goal: ${burpeeLabel}`, `Burpee round: full ${burpeeWindow} window, reps self-attested`]
+    : [`${challenge.durationDays} days, ${challenge.requiredActiveDays} active days required`, `Minimum per active day: ${challenge.minMinutesPerActiveDay} ${minuteLabel}${movementLabel}`];
   const lines = [
     `Move2Improve challenge: ${challenge.code}`,
     inviteUrl ? `Open / join: ${inviteUrl}` : '',
-    `${challenge.durationDays} days, ${challenge.requiredActiveDays} active days required`,
-    `Minimum per active day: ${challenge.minMinutesPerActiveDay} ${minuteLabel}${movementLabel}`,
+    ...ruleLines,
     `Group members listed locally: ${challenge.participants.length || 'open group'}`,
     summarizePaymentRequests(challenge.paymentRequests),
     'Share this invite in your existing group chat. M2I does not host chat or participant messages.',
     'Opening the link imports the challenge rules locally on that device.',
+    'If the link breaks, open the app and paste this invite token into Import challenge invite:',
+    inviteToken,
     'Stake is only due if the challenge is missed after final review. If complete, no payment is due.',
     'M2I never holds funds, pays automatically, or monitors settlement.'
   ].filter(Boolean);

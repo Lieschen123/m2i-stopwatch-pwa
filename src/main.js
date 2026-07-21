@@ -5,7 +5,7 @@ import { createImportedProofRecord, createJoinEnvelope, createOutcomeEnvelope, c
 import { formatDuration, shortNpub, clampText } from './format.js';
 import { generateNsec, keyInfoFromNsec, parseNpub, publishEvent, signClaimEvent, signPublicClaimEvent, createNip17DirectMessage } from './nostr.js';
 import { createSatsPaymentRequest, createUsdtPaymentRequest } from './payment.js';
-import { BURPEE_DEFAULT_DURATION_SECONDS, computeChallengeProgress, createChallengePlan, createChallengeSettlement, createInviteText, decodeChallengeInvite, formatDateInput, getChallengeSettlementStatus, importedProofClaimEntries, isBurpeeChallenge, isBurpeeClaim, normalizeChallengePaymentRequests, rankBurpeeClaims, requiredChallengeMovementMeters } from './challenge.js';
+import { BURPEE_DEFAULT_DURATION_SECONDS, computeChallengeProgress, createChallengePlan, createChallengeSettlement, createInviteText, decodeChallengeInvite, extractChallengeInviteToken, formatDateInput, getChallengeSettlementStatus, importedProofClaimEntries, isBurpeeChallenge, isBurpeeClaim, normalizeChallengePaymentRequests, rankBurpeeClaims, requiredChallengeMovementMeters } from './challenge.js';
 import { buildBoardViewModel } from './board.js';
 import { renderBoard } from './board-view.js';
 import { buildShareExport, parseShareImport, copyToClipboard as copyShareToClipboard } from './board-share.js';
@@ -495,6 +495,12 @@ function renderHomeScreen() {
       <strong>${shortNpub(state.key.npub)}</strong>
     </section>
     ${challenges.length ? `<section class="panel stack"><h2>Challenges</h2>${challenges.map((challenge) => renderChallengeCard(challenge, history)).join('')}</section>` : ''}
+    <form class="panel stack" data-form="import-challenge-invite">
+      <h2>Import Challenge</h2>
+      <label>Challenge invite link or token<textarea name="inviteText" maxlength="4000" rows="4" placeholder="Paste the Move2Improve invite link or fallback token"></textarea></label>
+      <button type="submit" class="secondary">Import challenge invite</button>
+      <p class="fineprint">Use this if the long invite link breaks in chat. Import stays local on this device.</p>
+    </form>
     <form class="panel stack" data-form="create-challenge">
       <h2>Create Challenge</h2>
       <label>Challenge name/code<input name="challengeCode" required maxlength="80" placeholder="JUNE-RUN"></label>
@@ -1235,6 +1241,18 @@ app.addEventListener('submit', async (event) => {
       setState({ activeChallengeId: challenge.id, screen: 'challenge', message: 'Challenge created locally.' });
     } catch (error) {
       setState({ message: error.message });
+    }
+  }
+  if (form.matches('[data-form="import-challenge-invite"]')) {
+    try {
+      const data = new FormData(form);
+      const token = extractChallengeInviteToken(data.get('inviteText'));
+      if (!token) throw new Error('Paste a Move2Improve invite link or token.');
+      const challenge = normalizeChallengePaymentRequests(decodeChallengeInvite(token));
+      store.saveChallenge(challenge);
+      setState({ activeChallengeId: challenge.id, screen: 'challenge', message: `Challenge ${challenge.code} imported locally.` });
+    } catch (error) {
+      setState({ message: error.message || 'Challenge invite could not be imported.' });
     }
   }
   if (form.matches('[data-form="start-challenge-workout"]')) {
