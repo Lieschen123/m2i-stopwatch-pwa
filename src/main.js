@@ -233,7 +233,7 @@ function maybeSpeakBurpeeCue(workout, now = Date.now()) {
     { key: 'one-minute', when: 60, text: 'One minute left.' },
     { key: 'thirty', when: 30, text: 'Thirty seconds.' },
     { key: 'ten', when: 10, text: 'Ten seconds.' },
-    { key: 'time', when: 0, text: 'Time.' }
+    { key: 'time', when: 0, text: 'Time. Stop now. Enter your reps.' }
   ];
   const cue = cues.find((item) => remaining <= item.when && !spokenWorkoutCues.has(item.key));
   if (!cue) return;
@@ -1038,7 +1038,7 @@ function renderWorkoutScreen() {
         <div class="target distance" data-distance-status>Waiting for local GPS estimate...</div>
         <div class="gps-details" data-gps-details></div>
       ` : ''}
-      ${isBurpee ? `<p class="fineprint">Daily round: 2:30 default. Voice cues announce start, 1 minute left, 30 seconds, 10 seconds, and time.${state.activeWorkout.musicEnabled ? ' Motivation music is playing softly in the background.' : ''}</p>` : ''}
+      ${isBurpee ? `<p class="fineprint">Daily round: 2:30 default. Voice cues announce start, 1 minute left, 30 seconds, 10 seconds, and “Time. Stop now. Enter your reps.”${state.activeWorkout.musicEnabled ? ' Motivation music is playing softly in the background.' : ''}</p>` : ''}
       <button class="danger" data-action="finish">${isBurpee ? 'Finish burpee round' : 'Finish challenge'}</button>
     </section>`);
   startTimer();
