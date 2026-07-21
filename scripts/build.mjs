@@ -25,7 +25,7 @@ await cp('public', 'dist', { recursive: true });
 let html = readFileSync('index.html', 'utf8')
   .replace('href="/manifest.webmanifest"', `href="${assetPath('manifest.webmanifest')}"`)
   .replace('href="/icon.svg"', `href="${assetPath('icon.svg')}"`)
-  .replace('href="/apple-touch-icon-v2.png"', `href="${assetPath('apple-touch-icon-v2.png')}"`)
+  .replace('href="/apple-touch-icon-real.png"', `href="${assetPath('apple-touch-icon-real.png')}"`)
   .replace('<script type="module" src="/src/main.js"></script>', `<link rel="stylesheet" href="${versionedAssetPath('assets/main.css')}" />\n    <script type="module" src="${versionedAssetPath('assets/main.js')}"></script>`);
 await writeFile('dist/index.html', html);
 const manifest = JSON.parse(readFileSync('dist/manifest.webmanifest', 'utf8'));
