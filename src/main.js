@@ -186,9 +186,14 @@ function startWorkoutMusic(workout) {
   try {
     workoutMusic = new Audio(assetUrl(WORKOUT_MUSIC_PATH));
     workoutMusic.loop = true;
-    workoutMusic.volume = 0.16;
+    workoutMusic.volume = 0.45;
     const playPromise = workoutMusic.play();
-    if (playPromise?.catch) playPromise.catch(() => stopWorkoutMusic());
+    if (playPromise?.catch) {
+      playPromise.catch(() => {
+        stopWorkoutMusic();
+        setState({ message: 'Music was blocked by this browser. Tap Start again or keep the timer visible.' });
+      });
+    }
     return true;
   } catch {
     workoutMusic = null;
@@ -309,8 +314,8 @@ async function beginWorkout(form, challenge = null) {
     satsInstructions: satsRequest?.instruction || clampText(data.get('satsInstructions'), 800)
   });
   store.setActiveWorkout(workout);
-  const voiceStarted = workout.activityType === 'burpees' ? startBurpeeVoiceCues(workout) : false;
   const musicStarted = startWorkoutMusic(workout);
+  const voiceStarted = workout.activityType === 'burpees' ? startBurpeeVoiceCues(workout) : false;
   const wakeLock = await requestWakeLock();
   let gpsTracker = null;
   let message = '';
