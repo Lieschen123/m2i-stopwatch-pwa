@@ -192,9 +192,8 @@ test('creates challenge invite URL and chat-safe invite token that can be import
   assert.equal(imported.paymentRequests[0].amount, 2);
 
   const inviteText = createInviteText(challenge, 'https://lieschen123.github.io/m2i-stopwatch-pwa/');
-  assert.match(inviteText, /Open app: https:\/\/lieschen123\.github\.io\/m2i-stopwatch-pwa\//);
-  assert.match(inviteText, /paste this invite token into Import Challenge/);
-  assert.doesNotMatch(inviteText, /#challenge=/);
+  assert.match(inviteText, /Open \/ join: https:\/\/lieschen123\.github\.io\/m2i-stopwatch-pwa\/#challenge=/);
+  assert.doesNotMatch(inviteText, /paste this invite token into Import Challenge/);
   assert.match(inviteText, /Stake if missed: 2\.00 USDt on TON\./);
   assert.match(inviteText, /only due if the challenge is missed after final review/i);
   assert.doesNotMatch(inviteText, /payment request/i);
@@ -586,9 +585,8 @@ test('challenge invite text states no stake when no stake is configured', () => 
   });
   const inviteText = createInviteText(challenge, 'https://lieschen123.github.io/m2i-stopwatch-pwa/');
   assert.match(inviteText, /No stake configured\./);
-  assert.match(inviteText, /Open app: https:\/\/lieschen123\.github\.io\/m2i-stopwatch-pwa\//);
-  assert.match(inviteText, /paste this invite token into Import Challenge/);
-  assert.doesNotMatch(inviteText, /#challenge=/);
+  assert.match(inviteText, /Open \/ join: https:\/\/lieschen123\.github\.io\/m2i-stopwatch-pwa\/#challenge=/);
+  assert.doesNotMatch(inviteText, /paste this invite token into Import Challenge/);
   assert.doesNotMatch(inviteText, /payment request/i);
 });
 

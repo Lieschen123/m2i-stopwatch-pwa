@@ -415,17 +415,67 @@ function base64UrlDecode(value) {
   return new TextDecoder().decode(bytes);
 }
 
+function compactChallengeInvite(challenge) {
+  return {
+    v: 2,
+    c: challenge.code,
+    d: challenge.durationDays,
+    r: challenge.requiredActiveDays,
+    m: challenge.minMinutesPerActiveDay,
+    km: challenge.minDistanceKm || undefined,
+    a: challenge.activityType === ACTIVITY_BURPEES ? ACTIVITY_BURPEES : undefined,
+    ds: challenge.durationSeconds || undefined,
+    mr: challenge.minReps || undefined,
+    ca: challenge.createdAt,
+    s: challenge.startsAt,
+    p: (challenge.participants || []).map((participant) => [participant.displayName, participant.npub || '']),
+    pay: challenge.paymentRequests?.length ? challenge.paymentRequests : undefined
+  };
+}
+
+function expandCompactChallengeInvite(payload) {
+  const code = slug(payload.c);
+  if (!code) throw new Error('Invalid challenge invite.');
+  const createdAt = safeNumber(payload.ca, Date.now());
+  const startsAt = safeNumber(payload.s, startOfLocalDay(createdAt));
+  const durationDays = Math.max(1, Math.round(safeNumber(payload.d, 30)));
+  const requiredActiveDays = Math.min(Math.max(1, Math.round(safeNumber(payload.r, 10))), durationDays);
+  const activityType = payload.a === ACTIVITY_BURPEES ? ACTIVITY_BURPEES : ACTIVITY_MOVEMENT;
+  const durationSeconds = activityType === ACTIVITY_BURPEES
+    ? Math.max(1, Math.round(safeNumber(payload.ds, BURPEE_DEFAULT_DURATION_SECONDS)))
+    : null;
+  return {
+    id: `challenge-${code.toLowerCase()}-${createdAt}`,
+    code,
+    durationDays,
+    requiredActiveDays,
+    minMinutesPerActiveDay: Math.max(1, Math.round(safeNumber(payload.m, 45))),
+    minDistanceKm: safeNumber(payload.km, 0) > 0 ? Number(safeNumber(payload.km).toFixed(3)) : null,
+    activityType,
+    scoringModel: activityType === ACTIVITY_BURPEES ? SCORING_REPS_FOR_TIME : SCORING_DURATION,
+    durationSeconds,
+    minReps: activityType === ACTIVITY_BURPEES && safeNumber(payload.mr, 0) > 0 ? Math.round(safeNumber(payload.mr)) : null,
+    createdAt,
+    startsAt,
+    endsAt: startsAt + durationDays * DAY_MS,
+    participants: (Array.isArray(payload.p) ? payload.p : []).map((participant, index) => ({
+      id: `participant-${index + 1}`,
+      displayName: String(Array.isArray(participant) ? participant[0] || '' : participant || '').trim(),
+      npub: String(Array.isArray(participant) ? participant[1] || '' : '').trim()
+    })).filter((participant) => participant.displayName),
+    paymentRequests: normalizePaymentRequests(payload.pay || [], { challengeCode: code, challengeId: `challenge-${code.toLowerCase()}-${createdAt}`, createdAt })
+  };
+}
+
 export function encodeChallengeInvite(challenge) {
-  return base64UrlEncode(JSON.stringify({
-    version: 1,
-    challenge
-  }));
+  return base64UrlEncode(JSON.stringify(compactChallengeInvite(challenge)));
 }
 
 export function decodeChallengeInvite(token) {
   const payload = JSON.parse(base64UrlDecode(token));
-  if (payload?.version !== 1 || !payload.challenge?.id || !payload.challenge?.code) throw new Error('Invalid challenge invite.');
-  return payload.challenge;
+  if (payload?.v === 2) return expandCompactChallengeInvite(payload);
+  if (payload?.version === 1 && payload.challenge?.id && payload.challenge?.code) return payload.challenge;
+  throw new Error('Invalid challenge invite.');
 }
 
 export function createChallengeInviteUrl(challenge, appUrl) {
@@ -461,8 +511,7 @@ function summarizePaymentRequests(paymentRequests = []) {
 }
 
 export function createInviteText(challenge, appUrl = '') {
-  const inviteToken = encodeChallengeInvite(challenge);
-  const appLink = appUrl ? new URL(appUrl).toString() : '';
+  const inviteUrl = createChallengeInviteUrl(challenge, appUrl);
   const burpeeLabel = challenge.requiredActiveDays === 1 ? '1 valid burpee day' : `${challenge.requiredActiveDays} valid burpee days`;
   const burpeeWindow = challenge.durationSeconds
     ? (challenge.durationSeconds % 60 === 0 ? `${challenge.durationSeconds / 60} min` : `${challenge.durationSeconds} sec`)
@@ -476,13 +525,11 @@ export function createInviteText(challenge, appUrl = '') {
     : [`${challenge.durationDays} days, ${challenge.requiredActiveDays} active days required`, `Minimum per active day: ${challenge.minMinutesPerActiveDay} ${minuteLabel}${movementLabel}`];
   const lines = [
     `Move2Improve challenge: ${challenge.code}`,
-    appLink ? `Open app: ${appLink}` : '',
+    inviteUrl ? `Open / join: ${inviteUrl}` : '',
     ...ruleLines,
     `Group members listed locally: ${challenge.participants.length || 'open group'}`,
     summarizePaymentRequests(challenge.paymentRequests),
     'Share this invite in your existing group chat. M2I does not host chat or participant messages.',
-    'Open the app, then paste this invite token into Import Challenge:',
-    inviteToken,
     'Stake is only due if the challenge is missed after final review. If complete, no payment is due.',
     'M2I never holds funds, pays automatically, or monitors settlement.'
   ].filter(Boolean);
