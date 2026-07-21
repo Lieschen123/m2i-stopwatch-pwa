@@ -1,6 +1,7 @@
 export function createWorkout({
   challengeId,
   challengeCode,
+  participant,
   targetMinutes,
   counterpartNpub,
   note,
@@ -12,13 +13,19 @@ export function createWorkout({
   satsRecipient,
   satsPaymentUri,
   satsInstructions,
+  activityType,
+  targetSeconds: explicitTargetSeconds,
   startedAt = Date.now()
 }) {
-  const targetSeconds = Number(targetMinutes) > 0 ? Math.round(Number(targetMinutes) * 60) : null;
+  const targetSeconds = explicitTargetSeconds > 0
+    ? Math.round(Number(explicitTargetSeconds))
+    : (Number(targetMinutes) > 0 ? Math.round(Number(targetMinutes) * 60) : null);
   return {
     challengeId: challengeId || '',
     challengeCode,
+    participant: participant || null,
     targetSeconds,
+    activityType: activityType === 'burpees' ? 'burpees' : 'movement',
     counterpartNpub: counterpartNpub || '',
     note: note || '',
     gpsEnabled: Boolean(gpsEnabled),

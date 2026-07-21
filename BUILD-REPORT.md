@@ -56,3 +56,39 @@ The PWA source, tests, production build, README, and local dependency workaround
 - Attempted `git add . && git commit -m "feat: build m2i stopwatch pwa"`.
 - Commit is blocked by filesystem permission: Git cannot create `.git/index.lock` (`Operation not permitted`). No stale lock exists; the sandbox denies writing inside `.git`.
 - Working tree contains the full deliverable set but remains uncommitted due to this environment permission issue.
+
+## First Live Test Results — 2026-06-19 10:00-10:30 GMT+2
+
+**Tester:** Lieschen, iPhone, Safari, LAN URL http://192.168.178.131:5173
+**Outcome:** ✅ SUCCESS end-to-end. First public M2I claim published.
+
+### What worked
+- Key generation flow OK
+- Stopwatch UI clean, mobile-first layout, target countdown correct
+- Wake Lock requested (display stayed on during workout)
+- Schnorr signing produced valid event (verified on relay)
+- "Send to relays" → published to both wss://relay.damus.io + wss://relay.primal.net
+- Tags (`duration`, `client`, `t=m2i`, `d=CHALLENGE_CODE`) all present and queryable
+- Privacy promise held: nsec stayed on device
+
+### Public verification (from third-party script)
+- Event ID: 1f4b871bd701d079...
+- Pubkey: a70098a4c186ffcb... (test-key, throwaway)
+- Challenge: TEST-RUN-001
+- Duration: 66s
+- Client: m2i-stopwatch-v1
+- Created: 2026-06-19T08:17:03Z (UTC)
+- Both Damus and Primal returned the event when filtering `kinds:[30316], #t:m2i`
+
+### Known issues to fix before production
+1. **Copy event JSON button not tappable on Safari/LAN HTTP**
+   - Likely Safari floating URL-bar covers tap area, or `navigator.clipboard.writeText` blocked on non-HTTPS
+   - Fix: HTTPS deploy + `viewport-fit=cover` + safe-area-inset-bottom padding
+2. **No "Copied" fallback for non-HTTPS** — show JSON in a `<textarea>` for manual selection on insecure context
+3. **No PWA install hint** — should detect Safari-on-iOS and surface "Add to Home Screen" guidance after first claim
+4. **No Settings screen tested** — relay-list edit UX not yet validated
+
+### Decisions emerging from live test
+- Add "show JSON inline" as fallback to Copy
+- Surface "Add to Home Screen" hint after first successful claim
+- Consider hiding "Send to relays" by default until user opts in (privacy-by-default)

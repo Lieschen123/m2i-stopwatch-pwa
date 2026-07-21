@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { extname, join, normalize } from 'node:path';
+import { extname, join, normalize, relative, sep } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -20,12 +20,18 @@ const types = new Map([
   ['.json', 'application/json; charset=utf-8']
 ]);
 const root = normalize(join(process.cwd(), 'dist'));
+const githubPagesBasePath = '/m2i-stopwatch-pwa/';
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
-    let path = normalize(join(root, decodeURIComponent(url.pathname)));
-    if (!path.startsWith(root)) throw new Error('bad path');
-    if (url.pathname === '/' || !existsSync(path)) path = join(root, 'index.html');
+    const requestPath = decodeURIComponent(url.pathname);
+    const distPath = requestPath.startsWith(githubPagesBasePath)
+      ? `/${requestPath.slice(githubPagesBasePath.length)}`
+      : requestPath;
+    let path = normalize(join(root, distPath));
+    const relativePath = relative(root, path);
+    if (relativePath === '..' || relativePath.startsWith(`..${sep}`)) throw new Error('bad path');
+    if (distPath === '/' || !existsSync(path)) path = join(root, 'index.html');
     const body = await readFile(path);
     res.writeHead(200, { 'Content-Type': types.get(extname(path)) || 'application/octet-stream' });
     res.end(body);
@@ -35,9 +41,9 @@ const server = createServer(async (req, res) => {
   }
 });
 server.on('error', (error) => {
-  console.error(`Unable to start dev server on 127.0.0.1:${port}: ${error.message}`);
+  console.error(`Unable to start dev server on 0.0.0.0:${port}: ${error.message}`);
   process.exit(1);
 });
-server.listen(port, '127.0.0.1', () => {
-  console.log(`M2I Stopwatch available at http://127.0.0.1:${port}`);
+server.listen(port, '0.0.0.0', () => {
+  console.log(`M2I Stopwatch available at http://0.0.0.0:${port} (LAN-accessible)`);
 });

@@ -1,6 +1,23 @@
 import { normalizePaymentRequests } from './payment.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+export const CHALLENGE_MIN_MOVEMENT_METERS = 10;
+export const CHALLENGE_MOVEMENT_METERS_PER_MINUTE = 5;
+
+export const ACTIVITY_MOVEMENT = 'movement';
+export const ACTIVITY_BURPEES = 'burpees';
+export const SCORING_DURATION = 'duration';
+export const SCORING_REPS_FOR_TIME = 'reps_for_time';
+export const PROOF_SELF_ATTESTED = 'self_attested';
+export const BURPEE_DEFAULT_DURATION_SECONDS = 7 * 60;
+
+export function isBurpeeChallenge(challenge) {
+  return challenge?.activityType === ACTIVITY_BURPEES;
+}
+
+export function isBurpeeClaim(claim) {
+  return claim?.activity_type === ACTIVITY_BURPEES;
+}
 
 function safeNumber(value, fallback = 0) {
   const parsed = Number(value);
@@ -40,6 +57,10 @@ export function createChallengePlan({
   minDistanceKm,
   participantsText,
   paymentRequests = [],
+  activityType,
+  scoringModel,
+  durationSeconds,
+  minReps,
   createdAt = Date.now()
 }) {
   const cleanCode = slug(code) || `M2I-${createdAt}`;
@@ -55,6 +76,16 @@ export function createChallengePlan({
     challengeId: id,
     createdAt
   });
+  const activity = activityType === ACTIVITY_BURPEES ? ACTIVITY_BURPEES : ACTIVITY_MOVEMENT;
+  const scoring = activity === ACTIVITY_BURPEES
+    ? SCORING_REPS_FOR_TIME
+    : (scoringModel === SCORING_REPS_FOR_TIME ? SCORING_REPS_FOR_TIME : SCORING_DURATION);
+  const burpeeDuration = activity === ACTIVITY_BURPEES
+    ? Math.max(1, Math.round(safeNumber(durationSeconds, BURPEE_DEFAULT_DURATION_SECONDS)))
+    : null;
+  const burpeeMinReps = activity === ACTIVITY_BURPEES && safeNumber(minReps, 0) > 0
+    ? Math.round(safeNumber(minReps))
+    : null;
   return {
     id,
     code: cleanCode,
@@ -62,6 +93,10 @@ export function createChallengePlan({
     requiredActiveDays: Math.min(requiredDays, days),
     minMinutesPerActiveDay: minMinutes,
     minDistanceKm: minKm,
+    activityType: activity,
+    scoringModel: scoring,
+    durationSeconds: burpeeDuration,
+    minReps: burpeeMinReps,
     createdAt,
     startsAt,
     endsAt: startsAt + days * DAY_MS,
@@ -95,21 +130,118 @@ export function workoutMeetsChallenge(workoutEntry, challenge) {
   if (workoutEntry.challengeId !== challenge.id && workoutEntry.claim.challenge_id !== challenge.id) return false;
   const stoppedAt = workoutEntry.claim.stopped_at || workoutEntry.stoppedAt || 0;
   if (stoppedAt < challenge.startsAt || stoppedAt >= challenge.endsAt) return false;
+  if (isBurpeeChallenge(challenge)) return burpeeClaimMeetsChallenge(workoutEntry.claim, challenge);
   if (workoutEntry.claim.duration_seconds < challenge.minMinutesPerActiveDay * 60) return false;
   if (challenge.minDistanceKm && (workoutEntry.claim.distance_km || 0) < challenge.minDistanceKm) return false;
+  if (!challenge.minDistanceKm && !claimHasPlausibleMovement(workoutEntry.claim, challenge)) return false;
   return true;
+}
+
+function burpeeClaimMeetsChallenge(claim, challenge) {
+  if (claim.activity_type !== ACTIVITY_BURPEES) return false;
+  if (claim.scoring_model !== SCORING_REPS_FOR_TIME) return false;
+  if (claim.proof_type !== PROOF_SELF_ATTESTED) return false;
+  const requiredDuration = safeNumber(challenge.durationSeconds, BURPEE_DEFAULT_DURATION_SECONDS);
+  if (safeNumber(claim.duration_seconds, 0) < requiredDuration) return false;
+  const reps = safeNumber(claim.rep_count, 0);
+  if (reps <= 0) return false;
+  if (challenge.minReps && reps < challenge.minReps) return false;
+  return true;
+}
+
+export function requiredChallengeMovementMeters(challenge) {
+  return Math.max(
+    CHALLENGE_MIN_MOVEMENT_METERS,
+    Math.round(safeNumber(challenge?.minMinutesPerActiveDay, 0) * CHALLENGE_MOVEMENT_METERS_PER_MINUTE)
+  );
+}
+
+function claimHasPlausibleMovement(claim, challenge) {
+  if (!claim || safeNumber(claim.gps_sample_count, 0) <= 0) return false;
+  const distanceMeters = claimDistanceMeters(claim);
+  return distanceMeters >= requiredChallengeMovementMeters(challenge);
+}
+
+function claimDistanceMeters(claim) {
+  const meters = safeNumber(claim.distance_meters, NaN);
+  if (Number.isFinite(meters)) return meters;
+  const km = safeNumber(claim.distance_km, NaN);
+  return Number.isFinite(km) ? km * 1000 : 0;
 }
 
 function localDayKey(timestamp) {
   return new Date(timestamp).toLocaleDateString('en-CA');
 }
 
+export function importedProofClaimEntries(importedProofs = []) {
+  const proofs = Array.isArray(importedProofs) ? importedProofs : [];
+  return proofs.map(importedProofToClaimEntry).filter(Boolean);
+}
+
+function importedProofToClaimEntry(proof) {
+  const privateSettlement = proof?.proof?.settlement_model === 'manual-private-settlement' ? proof.proof : null;
+  const event = privateSettlement?.signed_event || proof?.envelope?.payload?.historyEntry?.event || proof?.envelope?.payload?.event;
+  const claim = parseSignedClaim(event?.content) || proof?.envelope?.payload?.historyEntry?.claim || proof?.envelope?.payload?.claim;
+  if (!claim?.challenge_id) return null;
+  return {
+    id: proof.id || event?.id || claim.claim_hash || claim.stopped_at || claim.started_at,
+    source: 'imported-proof',
+    challengeId: claim.challenge_id,
+    challengeCode: claim.challenge_code || '',
+    stoppedAt: claim.stopped_at || 0,
+    claim,
+    event,
+    privateSettlement: privateSettlement || (event ? { signed_event: event } : null)
+  };
+}
+
+function parseSignedClaim(content) {
+  if (!content) return null;
+  if (typeof content === 'object') return content;
+  try {
+    return JSON.parse(String(content));
+  } catch {
+    return null;
+  }
+}
+
+function uniqueEntries(entries) {
+  const seen = new Set();
+  return entries.filter((entry) => {
+    const key = entry?.event?.id || entry?.privateSettlement?.signed_event?.id || entry?.claim?.claim_hash || entry?.id;
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function rankBurpeeClaims(entries = []) {
+  return entries
+    .filter((entry) => entry?.claim && isBurpeeClaim(entry.claim))
+    .slice()
+    .sort((a, b) => {
+      const repsDiff = safeNumber(b.claim.rep_count, 0) - safeNumber(a.claim.rep_count, 0);
+      if (repsDiff !== 0) return repsDiff;
+      const durDiff = safeNumber(a.claim.duration_seconds, 0) - safeNumber(b.claim.duration_seconds, 0);
+      if (durDiff !== 0) return durDiff;
+      return safeNumber(a.claim.stopped_at, 0) - safeNumber(b.claim.stopped_at, 0);
+    });
+}
+
 export function computeChallengeProgress(challenge, history = [], now = Date.now()) {
-  const linked = history.filter((entry) => entry.challengeId === challenge.id || entry.claim?.challenge_id === challenge.id);
+  const linked = uniqueEntries(history).filter((entry) => entry.challengeId === challenge.id || entry.claim?.challenge_id === challenge.id);
   const valid = linked.filter((entry) => workoutMeetsChallenge(entry, challenge));
   const validDays = new Set(valid.map((entry) => localDayKey(entry.claim.stopped_at || entry.stoppedAt || now)));
-  const validActiveDays = validDays.size;
-  const remainingActiveDays = Math.max(0, challenge.requiredActiveDays - validActiveDays);
+  const participantProgress = computeParticipantProgress(challenge, valid, now);
+  const hasRoster = Array.isArray(challenge.participants) && challenge.participants.length > 0;
+  const rosterComplete = hasRoster && participantProgress.every((participant) => participant.isComplete);
+  const validActiveDays = hasRoster
+    ? Math.min(...participantProgress.map((participant) => participant.validActiveDays))
+    : validDays.size;
+  const remainingActiveDays = hasRoster
+    ? participantProgress.reduce((total, participant) => total + participant.remainingActiveDays, 0)
+    : Math.max(0, challenge.requiredActiveDays - validActiveDays);
   return {
     challengeId: challenge.id,
     totalWorkouts: linked.length,
@@ -117,10 +249,42 @@ export function computeChallengeProgress(challenge, history = [], now = Date.now
     validActiveDays,
     requiredActiveDays: challenge.requiredActiveDays,
     remainingActiveDays,
-    isComplete: validActiveDays >= challenge.requiredActiveDays,
+    isComplete: hasRoster ? rosterComplete : validActiveDays >= challenge.requiredActiveDays,
     isExpired: now >= challenge.endsAt,
-    daysRemaining: Math.max(0, Math.ceil((challenge.endsAt - now) / DAY_MS))
+    daysRemaining: Math.max(0, Math.ceil((challenge.endsAt - now) / DAY_MS)),
+    participantProgress
   };
+}
+
+function computeParticipantProgress(challenge, validEntries, now) {
+  const participants = Array.isArray(challenge.participants) ? challenge.participants : [];
+  return participants.map((participant) => {
+    const entries = validEntries.filter((entry) => claimMatchesParticipant(entry.claim, participant));
+    const days = new Set(entries.map((entry) => localDayKey(entry.claim.stopped_at || entry.stoppedAt || now)));
+    const validActiveDays = days.size;
+    return {
+      id: participant.id || '',
+      displayName: participant.displayName || '',
+      npub: participant.npub || '',
+      validActiveDays,
+      validWorkouts: entries.length,
+      requiredActiveDays: challenge.requiredActiveDays,
+      remainingActiveDays: Math.max(0, challenge.requiredActiveDays - validActiveDays),
+      isComplete: validActiveDays >= challenge.requiredActiveDays
+    };
+  });
+}
+
+function claimMatchesParticipant(claim, participant) {
+  if (!claim || !participant) return false;
+  const participantNpub = String(participant.npub || '').trim();
+  const claimNpub = String(claim.claimant_npub || '').trim();
+  if (participantNpub && claimNpub && participantNpub === claimNpub) return true;
+  return normalizeName(claim.claimant_display_name) === normalizeName(participant.displayName);
+}
+
+function normalizeName(value) {
+  return String(value || '').trim().toLowerCase();
 }
 
 export function getChallengeSettlementStatus(progress) {
@@ -128,7 +292,7 @@ export function getChallengeSettlementStatus(progress) {
     return {
       challenge_result: 'open',
       payment_due: null,
-      payment_reason: progress.isComplete ? 'Complete so far — final review after close' : 'Open — final review after close'
+      payment_reason: progress.isComplete ? 'Complete so far — final review after close' : incompletePaymentReason(progress, 'Open — final review after close')
     };
   }
   if (progress.isComplete) {
@@ -141,15 +305,24 @@ export function getChallengeSettlementStatus(progress) {
   return {
     challenge_result: 'missed',
     payment_due: true,
-    payment_reason: 'Missed — stake due'
+    payment_reason: incompletePaymentReason(progress, 'Missed — stake due')
   };
 }
 
-export function createChallengeSettlement({ challenge, history = [], progress }) {
-  const entries = history.filter((entry) => entry.challengeId === challenge.id || entry.claim?.challenge_id === challenge.id);
+function incompletePaymentReason(progress, fallback) {
+  const missing = (progress.participantProgress || []).filter((participant) => !participant.isComplete);
+  if (!missing.length) return fallback;
+  const names = missing.map((participant) => participant.displayName || participant.npub || participant.id || 'participant').join(', ');
+  return fallback + ': ' + names + ' incomplete';
+}
+
+export function createChallengeSettlement({ challenge, history = [], importedProofs = [], progress }) {
+  const importedEntries = importedProofClaimEntries(importedProofs);
+  const allEntries = uniqueEntries([...history, ...importedEntries]);
+  const entries = allEntries.filter((entry) => entry.challengeId === challenge.id || entry.claim?.challenge_id === challenge.id);
   const referenceSuffixes = collectLinkedPaymentReferenceSuffixes(entries);
   const normalizedChallenge = normalizeChallengePaymentRequests(challenge, referenceSuffixes);
-  const currentProgress = progress || computeChallengeProgress(normalizedChallenge, history);
+  const currentProgress = progress || computeChallengeProgress(normalizedChallenge, entries);
   const settlementStatus = getChallengeSettlementStatus(currentProgress);
   return {
     settlement_model: 'manual-group-settlement',
@@ -275,11 +448,14 @@ function summarizePaymentRequests(paymentRequests = []) {
 export function createInviteText(challenge, appUrl = '') {
   const inviteUrl = createChallengeInviteUrl(challenge, appUrl);
   const minuteLabel = challenge.minMinutesPerActiveDay === 1 ? 'minute' : 'minutes';
+  const movementLabel = challenge.minDistanceKm
+    ? ` + ${challenge.minDistanceKm} km GPS aggregate distance`
+    : ` + at least ${requiredChallengeMovementMeters(challenge)} m GPS aggregate movement`;
   const lines = [
     `Move2Improve challenge: ${challenge.code}`,
     inviteUrl ? `Open / join: ${inviteUrl}` : '',
     `${challenge.durationDays} days, ${challenge.requiredActiveDays} active days required`,
-    `Minimum per active day: ${challenge.minMinutesPerActiveDay} ${minuteLabel}${challenge.minDistanceKm ? ` + ${challenge.minDistanceKm} km` : ''}`,
+    `Minimum per active day: ${challenge.minMinutesPerActiveDay} ${minuteLabel}${movementLabel}`,
     `Group members listed locally: ${challenge.participants.length || 'open group'}`,
     summarizePaymentRequests(challenge.paymentRequests),
     'Share this invite in your existing group chat. M2I does not host chat or participant messages.',

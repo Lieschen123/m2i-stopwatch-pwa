@@ -4,3 +4,16 @@ node_modules/
 .env.*
 coverage/
 .vite/
+
+# Local OpenClaw/assistant workspace files, not app source
+.openclaw/
+AGENTS.md
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
+
+# Local one-off test redirect pages
+public/test-alex.html
+dist/test-alex.html

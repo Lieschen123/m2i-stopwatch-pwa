@@ -1,14 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { verifyEvent } from 'nostr-tools/pure';
-import { createChallengeInviteUrl, createChallengePlan, computeChallengeProgress, createChallengeSettlement, createInviteText, decodeChallengeInvite, formatDateInput, parseParticipants, workoutMeetsChallenge } from '../src/challenge.js';
+import { createChallengeInviteUrl, createChallengePlan, computeChallengeProgress, createChallengeSettlement, createInviteText, decodeChallengeInvite, formatDateInput, importedProofClaimEntries, isBurpeeChallenge, parseParticipants, rankBurpeeClaims, workoutMeetsChallenge } from '../src/challenge.js';
 import { createClaim, createHistoryEntry, createPublicClaimProjection } from '../src/claim.js';
 import { canonicalJson, sha256Hex } from '../src/crypto.js';
-import { createChallengeEnvelope, createClaimEnvelope, createImportedProofRecord, createJoinEnvelope, parseEnvelope } from '../src/envelope.js';
+import { createChallengeEnvelope, createClaimEnvelope, createImportedProofRecord, createJoinEnvelope, createOutcomeEnvelope, createPaymentRequestEnvelope, createReceiptEnvelope, parseEnvelope } from '../src/envelope.js';
 import { createGpsTracker, distanceMeters } from '../src/gps.js';
 import { generateNsec, keyInfoFromNsec, signClaimEvent, signPublicClaimEvent } from '../src/nostr.js';
 import { createSatsPaymentRequest, createUsdtPaymentRequest } from '../src/payment.js';
 import { createStorage } from '../src/storage.js';
+
+function acceptedGps(distanceMeters) {
+  return {
+    gps_used: true,
+    distance_meters: distanceMeters,
+    distance_km: distanceMeters / 1000,
+    gps_sample_count: 2,
+    gps_rejected_sample_count: 0,
+    gps_accuracy_summary: '2 samples',
+    gps_points_discarded: true,
+    verification_method: 'pwa-gps-aggregate-v1'
+  };
+}
 
 function memoryStorage() {
   const map = new Map();
@@ -18,6 +31,19 @@ function memoryStorage() {
     removeItem: (key) => map.delete(key)
   };
 }
+
+test('stores local settlement statuses by challenge', () => {
+  const store = createStorage(memoryStorage());
+
+  assert.equal(store.getSettlementStatus('challenge-1'), null);
+  store.saveSettlementStatus({ challengeId: 'challenge-1', status: 'open', updatedAt: 1 });
+  store.saveSettlementStatus({ challengeId: 'challenge-1', status: 'settled_late', updatedAt: 2 });
+  store.saveSettlementStatus({ challengeId: 'challenge-2', status: 'waived', updatedAt: 3 });
+
+  assert.equal(store.getSettlementStatus('challenge-1').status, 'settled_late');
+  assert.equal(store.getSettlementStatus('challenge-2').status, 'waived');
+  assert.equal(store.getSettlementStatuses().length, 2);
+});
 
 test('canonical JSON sorts object keys recursively', () => {
   assert.equal(canonicalJson({ b: 2, a: { d: 4, c: 3 } }), '{"a":{"c":3,"d":4},"b":2}');
@@ -51,6 +77,96 @@ test('parses comma and newline separated challenge participants', () => {
   const participants = parseParticipants('Nono, Alex\nMia|npub1mia');
   assert.deepEqual(participants.map((participant) => participant.displayName), ['Nono', 'Alex', 'Mia']);
   assert.equal(participants[2].npub, 'npub1mia');
+});
+
+test('creates burpee reps-for-time challenge plan', () => {
+  const challenge = createChallengePlan({
+    code: 'Burpee Blast',
+    durationDays: '7',
+    requiredActiveDays: '3',
+    minMinutesPerActiveDay: '45',
+    participantsText: 'Nono\nAlex',
+    activityType: 'burpees',
+    durationSeconds: 420,
+    minReps: 50,
+    startDate: '2024-06-18',
+    createdAt: 1718700000000
+  });
+
+  assert.equal(isBurpeeChallenge(challenge), true);
+  assert.equal(challenge.activityType, 'burpees');
+  assert.equal(challenge.scoringModel, 'reps_for_time');
+  assert.equal(challenge.durationSeconds, 420);
+  assert.equal(challenge.minReps, 50);
+  assert.equal(challenge.requiredActiveDays, 3);
+});
+
+test('burpee claim records reps as signed self-attestation', () => {
+  const claim = createClaim({
+    challengeId: 'challenge-burpees',
+    challengeCode: 'BURPEES',
+    startedAt: 1000,
+    stoppedAt: 421000,
+    claimantNpub: 'npub1nono',
+    activity: { activityType: 'burpees', repCount: 83 }
+  });
+
+  assert.equal(claim.activity_type, 'burpees');
+  assert.equal(claim.scoring_model, 'reps_for_time');
+  assert.equal(claim.proof_type, 'self_attested');
+  assert.equal(claim.rep_count, 83);
+  assert.equal(claim.duration_seconds, 420);
+});
+
+test('burpee challenge validity and ranking use reps-for-time rules', () => {
+  const challenge = createChallengePlan({
+    code: 'BURPEES',
+    durationDays: 1,
+    requiredActiveDays: 1,
+    activityType: 'burpees',
+    durationSeconds: 420,
+    minReps: 50,
+    startDate: '2024-06-18',
+    createdAt: 1718700000000
+  });
+  const validClaim = createClaim({
+    challengeId: challenge.id,
+    challengeCode: challenge.code,
+    startedAt: challenge.startsAt,
+    stoppedAt: challenge.startsAt + 421000,
+    claimantNpub: 'npub1nono',
+    activity: { activityType: 'burpees', repCount: 83 }
+  });
+  const shortClaim = createClaim({
+    challengeId: challenge.id,
+    challengeCode: challenge.code,
+    startedAt: challenge.startsAt,
+    stoppedAt: challenge.startsAt + 300000,
+    claimantNpub: 'npub1alex',
+    activity: { activityType: 'burpees', repCount: 90 }
+  });
+  const lowRepClaim = createClaim({
+    challengeId: challenge.id,
+    challengeCode: challenge.code,
+    startedAt: challenge.startsAt,
+    stoppedAt: challenge.startsAt + 421000,
+    claimantNpub: 'npub1mia',
+    activity: { activityType: 'burpees', repCount: 30 }
+  });
+
+  const validEntry = { challengeId: challenge.id, claim: validClaim };
+  assert.equal(workoutMeetsChallenge(validEntry, challenge), true);
+  assert.equal(workoutMeetsChallenge({ challengeId: challenge.id, claim: shortClaim }, challenge), false);
+  assert.equal(workoutMeetsChallenge({ challengeId: challenge.id, claim: lowRepClaim }, challenge), false);
+  assert.equal(computeChallengeProgress(challenge, [validEntry], challenge.startsAt + 422000).isComplete, true);
+
+  const ranked = rankBurpeeClaims([
+    { claim: { ...validClaim, rep_count: 71, duration_seconds: 420, stopped_at: 3 } },
+    { claim: { ...validClaim, rep_count: 83, duration_seconds: 421, stopped_at: 2 } },
+    { claim: { ...validClaim, rep_count: 83, duration_seconds: 420, stopped_at: 1 } }
+  ]);
+  assert.equal(ranked[0].claim.rep_count, 83);
+  assert.equal(ranked[0].claim.duration_seconds, 420);
 });
 
 test('creates clickable challenge invite URL that can be imported locally', () => {
@@ -125,7 +241,8 @@ test('creates join and claim envelopes with challenge-scoped hashes', () => {
       challengeCode: challenge.code,
       startedAt: challenge.startsAt,
       stoppedAt: challenge.startsAt + 11 * 60 * 1000,
-      claimantNpub: 'npub1test'
+      claimantNpub: 'npub1test',
+      claimantDisplayName: 'Nono'
     }),
     event: { id: 'claim-event', kind: 30316 }
   });
@@ -135,6 +252,97 @@ test('creates join and claim envelopes with challenge-scoped hashes', () => {
   assert.equal(join.payload.challenge.id, challenge.id);
   assert.match(join.payload.challenge_hash, /^[0-9a-f]{64}$/);
   assert.equal(parseEnvelope(claimEnvelope).payload.historyEntry.id, 'claim-event');
+  assert.equal(entry.claim.claimant_display_name, 'Nono');
+  assert.match(createImportedProofRecord(claimEnvelope).summary.label, /Nono/);
+});
+
+test('creates missed challenge outcome payment request and receipt envelopes', () => {
+  const paymentRequest = createUsdtPaymentRequest({
+    amount: '2',
+    network: 'ton',
+    recipient: 'EQDteamjaraddress',
+    challengeCode: 'MISSED-COORD'
+  });
+  const challenge = createChallengePlan({
+    code: 'MISSED-COORD',
+    startDate: '2026-06-27',
+    durationDays: '1',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '20',
+    paymentRequests: [paymentRequest],
+    createdAt: 1782550000000
+  });
+  const settlement = createChallengeSettlement({
+    challenge,
+    history: [],
+    progress: computeChallengeProgress(challenge, [], challenge.endsAt)
+  });
+  const outcome = createOutcomeEnvelope({ settlement, createdAt: 1782636400000 });
+  const request = createPaymentRequestEnvelope({
+    settlement,
+    request: settlement.paymentRequests[0],
+    createdAt: 1782636500000
+  });
+  const receipt = createReceiptEnvelope({
+    settlement,
+    paymentRequestEnvelope: request,
+    markedBy: { displayName: 'Nono' },
+    createdAt: 1782636600000,
+    note: 'Marked after manual wallet payment.'
+  });
+  const outcomeRecord = createImportedProofRecord(outcome, { importedAt: 1782636700000 });
+  const requestRecord = createImportedProofRecord(request, { importedAt: 1782636800000 });
+  const receiptRecord = createImportedProofRecord(receipt, { importedAt: 1782636900000 });
+
+  assert.equal(outcome.type, 'm2i.outcome.v1');
+  assert.equal(request.type, 'm2i.payment_request.v1');
+  assert.equal(receipt.type, 'm2i.receipt.v1');
+  assert.equal(parseEnvelope(outcome).payload.settlement.payment_due, true);
+  assert.equal(parseEnvelope(request).payload.request.reference, settlement.paymentRequests[0].reference);
+  assert.equal(parseEnvelope(receipt).payload.payment_request_hash, request.envelope_hash);
+  assert.equal(outcomeRecord.summary.kind, 'outcome');
+  assert.equal(outcomeRecord.summary.challengeId, challenge.id);
+  assert.equal(outcomeRecord.summary.paymentDue, true);
+  assert.equal(requestRecord.summary.kind, 'payment-request');
+  assert.match(requestRecord.summary.label, /2\.00 USDt/);
+  assert.equal(receiptRecord.summary.kind, 'receipt');
+  assert.equal(receiptRecord.summary.paymentRequestHash, request.envelope_hash);
+});
+
+test('payment request envelope rejects complete challenge settlement', () => {
+  const challenge = createChallengePlan({
+    code: 'COMPLETE-COORD',
+    startDate: '2026-06-27',
+    durationDays: '1',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '20',
+    paymentRequests: [createUsdtPaymentRequest({
+      amount: '2',
+      network: 'ton',
+      recipient: 'EQDteamjaraddress',
+      challengeCode: 'COMPLETE-COORD'
+    })],
+    createdAt: 1782550000000
+  });
+  const validWorkout = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: challenge.startsAt,
+      stoppedAt: challenge.startsAt + 21 * 60 * 1000,
+      claimantNpub: 'npub1completecoord',
+      gpsSummary: acceptedGps(120)
+    }),
+    event: { id: 'complete-coord-event' }
+  });
+  const settlement = createChallengeSettlement({
+    challenge,
+    history: [validWorkout],
+    progress: computeChallengeProgress(challenge, [validWorkout], challenge.endsAt)
+  });
+
+  assert.equal(settlement.payment_due, false);
+  assert.throws(() => createPaymentRequestEnvelope({ settlement }), /requires a missed challenge with payment due/);
 });
 
 test('parseEnvelope rejects invalid JSON and tampered hashes with clear errors', () => {
@@ -205,6 +413,165 @@ test('imported proof records accept existing copied challenge proof JSON', () =>
   assert.equal(proof.summary.result, 'open');
 });
 
+test('imported proof records accept copied private claim proof JSON', () => {
+  const claim = createClaim({
+    challengeId: 'challenge-alex-test',
+    challengeCode: 'ALEX-TEST',
+    startedAt: 1782550000000,
+    stoppedAt: 1782550065000,
+    claimantNpub: 'npub1alex',
+    claimantDisplayName: 'Alex',
+    gpsSummary: acceptedGps(35)
+  });
+  const proof = createImportedProofRecord(JSON.stringify({
+    settlement_model: 'manual-private-settlement',
+    signed_event: { id: 'event-alex', content: claim.canonical_json }
+  }), { challengeId: 'challenge-alex-test', importedAt: 1782550300000 });
+
+  assert.equal(proof.challengeId, 'challenge-alex-test');
+  assert.equal(proof.summary.kind, 'claim');
+  assert.match(proof.summary.label, /Alex/);
+  assert.equal(proof.summary.challengeCode, 'ALEX-TEST');
+});
+
+test('imported proof records accept actual Alex private settlement proof', () => {
+  const alexProof = String.raw`{
+ "settlement_model": "manual-private-settlement",
+ "signed_event": {
+ "kind": 30316,
+ "pubkey": "6932f32f80e97d3371cd99d64757209fe922bd2b4b1157b6fc5a7cc55b722cd4",
+ "created_at": 1782753768,
+ "tags": [["d", "TEST-WITH-ALEX-2"], ["duration", "63"], ["client", "m2i-stopwatch-v1"], ["t", "m2i"], ["target", "60"]],
+ "content": "{\"challenge_code\":\"TEST-WITH-ALEX-2\",\"challenge_id\":\"challenge-test-with-alex-2-1782752944985\",\"claimant_display_name\":\"Alex\",\"claimant_npub\":\"npub1dye0xtuqa97nxuwdn8tyw4eqnl5j90ftfvg40dhutf7v2kmj9n2q7f7r24\",\"distance_km\":0.154,\"distance_meters\":154,\"duration_human\":\"1:03\",\"duration_ms\":63457,\"duration_seconds\":63,\"gps_used\":true,\"local_verification\":\"movement-aggregate-v1\",\"verification_method\":\"pwa-gps-aggregate-v1\"}",
+ "id": "f68c88f41091953c9c476a97b67d317d222eb77e04758e88c2a752aa3d0ff628",
+ "sig": "059b40e1a731221811e0c7076591df55c64a6d38541f6915e84a652bf332ff73510460640f29780a0e3fb5df5c2775671e7b6f31e5be456feb04ff91c059bde1"
+ }
+}`;
+  const proof = createImportedProofRecord(alexProof, { challengeId: 'challenge-test-with-alex-2-1782752944985' });
+
+  assert.equal(proof.challengeId, 'challenge-test-with-alex-2-1782752944985');
+  assert.equal(proof.summary.kind, 'claim');
+  assert.equal(proof.summary.challengeCode, 'TEST-WITH-ALEX-2');
+  assert.match(proof.summary.label, /Alex/);
+});
+
+test('imported proof records extract JSON pasted inside a group message', () => {
+  const challenge = createChallengePlan({
+    code: 'GROUP-MSG',
+    startDate: '2026-06-27',
+    durationDays: '2',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '10',
+    createdAt: 1782550000000
+  });
+  const message = [
+    'Move2Improve proof',
+    'Paste the JSON below into the challenge page:',
+    JSON.stringify({
+      settlement_model: 'manual-group-settlement',
+      challenge,
+      challenge_result: 'open',
+      signed_claims: [{ signed_event: { id: 'abc' } }]
+    }, null, 2)
+  ].join('\n');
+  const proof = createImportedProofRecord(message, { challengeId: challenge.id, importedAt: 1782550300000 });
+
+  assert.equal(proof.format, 'legacy-challenge-proof');
+  assert.equal(proof.challengeId, challenge.id);
+  assert.equal(proof.summary.localClaims, 1);
+});
+
+test('challenge settlement counts imported Alex proof but does not complete missing roster members', () => {
+  const challenge = {
+    id: 'challenge-test-with-alex-2-1782752944985',
+    code: 'TEST-WITH-ALEX-2',
+    durationDays: 1,
+    requiredActiveDays: 1,
+    minMinutesPerActiveDay: 1,
+    minDistanceKm: null,
+    createdAt: 1782752944985,
+    startsAt: 1782684000000,
+    endsAt: 1782770400000,
+    participants: [{ id: 'participant-1', displayName: 'Nono', npub: '' }, { id: 'participant-2', displayName: 'Alex', npub: '' }],
+    paymentRequests: []
+  };
+  const alexProof = createImportedProofRecord(JSON.stringify({
+    settlement_model: 'manual-private-settlement',
+    signed_event: {
+      id: 'f68c88f41091953c9c476a97b67d317d222eb77e04758e88c2a752aa3d0ff628',
+      content: JSON.stringify({
+        challenge_code: 'TEST-WITH-ALEX-2',
+        challenge_id: challenge.id,
+        claimant_display_name: 'Alex',
+        distance_km: 0.154,
+        distance_meters: 154,
+        duration_human: '1:03',
+        duration_ms: 63457,
+        duration_seconds: 63,
+        gps_sample_count: 63,
+        gps_used: true,
+        local_verification: 'movement-aggregate-v1',
+        started_at: 1782753705093,
+        stopped_at: 1782753768550,
+        verification_method: 'pwa-gps-aggregate-v1'
+      })
+    }
+  }), { challengeId: challenge.id });
+  const importedEntries = importedProofClaimEntries([alexProof]);
+  const progress = computeChallengeProgress(challenge, importedEntries, challenge.endsAt);
+  const settlement = createChallengeSettlement({ challenge, history: [], importedProofs: [alexProof], progress });
+
+  assert.equal(progress.totalWorkouts, 1);
+  assert.equal(progress.validWorkouts, 1);
+  assert.equal(settlement.challenge_result, 'missed');
+  assert.equal(settlement.payment_due, true);
+  assert.match(settlement.payment_reason, /Nono incomplete/);
+  assert.equal(settlement.signed_claims.length, 1);
+  assert.equal(JSON.parse(settlement.signed_claims[0].signed_event.content).claimant_display_name, 'Alex');
+});
+
+test('challenge settlement completes when every roster participant has a valid day', () => {
+  const challenge = createChallengePlan({
+    code: 'TEAM-COMPLETE',
+    startDate: '2026-06-27',
+    durationDays: '1',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '1',
+    participantsText: 'Nono, Alex',
+    createdAt: 1782752944985
+  });
+  const nono = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      claimantDisplayName: 'Nono',
+      startedAt: challenge.startsAt + 1000,
+      stoppedAt: challenge.startsAt + 65000,
+      gpsSummary: acceptedGps(25)
+    }),
+    event: { id: 'nono-team-complete' }
+  });
+  const alex = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      claimantDisplayName: 'Alex',
+      startedAt: challenge.startsAt + 2000,
+      stoppedAt: challenge.startsAt + 66000,
+      gpsSummary: acceptedGps(25)
+    }),
+    event: { id: 'alex-team-complete' }
+  });
+  const history = [nono, alex];
+  const progress = computeChallengeProgress(challenge, history, challenge.endsAt);
+  const settlement = createChallengeSettlement({ challenge, history, progress });
+
+  assert.equal(progress.isComplete, true);
+  assert.equal(settlement.challenge_result, 'complete');
+  assert.equal(settlement.payment_due, false);
+  assert.equal(settlement.signed_claims.length, 2);
+});
+
 test('challenge invite text states no stake when no stake is configured', () => {
   const challenge = createChallengePlan({
     code: 'NO STAKE',
@@ -250,7 +617,8 @@ test('computes local challenge progress by valid active day', () => {
       challengeCode: challenge.code,
       startedAt: 1718700000000,
       stoppedAt: 1718700000000 + 46 * 60 * 1000,
-      claimantNpub: 'npub1m2itest'
+      claimantNpub: 'npub1m2itest',
+      gpsSummary: acceptedGps(240)
     }),
     event: { id: 'valid-one' }
   });
@@ -270,7 +638,8 @@ test('computes local challenge progress by valid active day', () => {
       challengeCode: challenge.code,
       startedAt: 1718872800000,
       stoppedAt: 1718872800000 + 50 * 60 * 1000,
-      claimantNpub: 'npub1m2itest'
+      claimantNpub: 'npub1m2itest',
+      gpsSummary: acceptedGps(260)
     }),
     event: { id: 'valid-two' }
   });
@@ -280,6 +649,77 @@ test('computes local challenge progress by valid active day', () => {
   assert.equal(progress.validWorkouts, 2);
   assert.equal(progress.validActiveDays, 2);
   assert.equal(progress.isComplete, true);
+});
+
+test('duration-only workout does not meet a no-distance challenge', () => {
+  const challenge = createChallengePlan({
+    code: 'movement needed',
+    startDate: '2024-06-18',
+    durationDays: '1',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '10',
+    createdAt: 1718700000000
+  });
+  const durationOnly = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: challenge.startsAt,
+      stoppedAt: challenge.startsAt + 11 * 60 * 1000,
+      claimantNpub: 'npub1m2itest'
+    }),
+    event: { id: 'duration-only' }
+  });
+
+  assert.equal(workoutMeetsChallenge(durationOnly, challenge), false);
+});
+
+test('enough minutes plus plausible GPS aggregate meets a no-distance challenge', () => {
+  const challenge = createChallengePlan({
+    code: 'movement ok',
+    startDate: '2024-06-18',
+    durationDays: '1',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '10',
+    createdAt: 1718700000000
+  });
+  const plausibleMovement = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: challenge.startsAt,
+      stoppedAt: challenge.startsAt + 11 * 60 * 1000,
+      claimantNpub: 'npub1m2itest',
+      gpsSummary: acceptedGps(60)
+    }),
+    event: { id: 'plausible-movement' }
+  });
+
+  assert.equal(workoutMeetsChallenge(plausibleMovement, challenge), true);
+});
+
+test('too-small GPS aggregate does not meet a no-distance challenge', () => {
+  const challenge = createChallengePlan({
+    code: 'movement small',
+    startDate: '2024-06-18',
+    durationDays: '1',
+    requiredActiveDays: '1',
+    minMinutesPerActiveDay: '10',
+    createdAt: 1718700000000
+  });
+  const tooSmallMovement = createHistoryEntry({
+    claim: createClaim({
+      challengeId: challenge.id,
+      challengeCode: challenge.code,
+      startedAt: challenge.startsAt,
+      stoppedAt: challenge.startsAt + 11 * 60 * 1000,
+      claimantNpub: 'npub1m2itest',
+      gpsSummary: acceptedGps(40)
+    }),
+    event: { id: 'too-small-movement' }
+  });
+
+  assert.equal(workoutMeetsChallenge(tooSmallMovement, challenge), false);
 });
 
 test('distance goal requires both minimum minutes and distance per active day', () => {
@@ -363,7 +803,8 @@ test('does not count workouts outside the challenge date window', () => {
       challengeCode: challenge.code,
       startedAt: challenge.startsAt + 5 * 60 * 1000,
       stoppedAt: challenge.startsAt + 7 * 60 * 1000,
-      claimantNpub: 'npub1m2itest'
+      claimantNpub: 'npub1m2itest',
+      gpsSummary: acceptedGps(12)
     }),
     event: { id: 'inside-window' }
   });
@@ -548,7 +989,8 @@ test('challenge settlement marks closed complete challenge with no payment due',
       challengeCode: challenge.code,
       startedAt: challenge.startsAt,
       stoppedAt: challenge.startsAt + 46 * 60 * 1000,
-      claimantNpub: 'npub1complete'
+      claimantNpub: 'npub1complete',
+      gpsSummary: acceptedGps(240)
     }),
     event: { id: 'complete-event' }
   });

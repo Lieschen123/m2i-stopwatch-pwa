@@ -76,6 +76,19 @@ export function createStorage(storage = globalThis.localStorage) {
       writeJson(storage, STORAGE_KEYS.challengeJoins, next);
       return join;
     },
+    getSettlementStatuses() {
+      const statuses = readJson(storage, STORAGE_KEYS.settlementStatuses, []);
+      return Array.isArray(statuses) ? statuses : [];
+    },
+    getSettlementStatus(challengeId) {
+      return this.getSettlementStatuses().find((status) => status.challengeId === challengeId) || null;
+    },
+    saveSettlementStatus(status) {
+      const existing = this.getSettlementStatuses().filter((item) => item.challengeId !== status.challengeId);
+      const next = [status, ...existing].slice(0, 100);
+      writeJson(storage, STORAGE_KEYS.settlementStatuses, next);
+      return status;
+    },
     getImportedProofs(challengeId = '') {
       const proofs = readJson(storage, STORAGE_KEYS.importedProofs, []);
       const list = Array.isArray(proofs) ? proofs : [];

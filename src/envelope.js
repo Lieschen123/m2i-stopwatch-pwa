@@ -4,7 +4,10 @@ export const ENVELOPE_VERSION = 1;
 export const ENVELOPE_TYPES = {
   challenge: 'm2i.challenge.v1',
   join: 'm2i.join.v1',
-  claim: 'm2i.claim.v1'
+  claim: 'm2i.claim.v1',
+  outcome: 'm2i.outcome.v1',
+  paymentRequest: 'm2i.payment_request.v1',
+  receipt: 'm2i.receipt.v1'
 };
 
 function jsonClone(value) {
@@ -15,6 +18,11 @@ function assertPlainObject(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`${label} must be an object.`);
   }
+}
+
+function shortHash(value) {
+  const text = String(value || '').trim();
+  return text ? text.slice(0, 12) : '';
 }
 
 function createEnvelope(type, payload, createdAt = Date.now()) {
@@ -82,6 +90,47 @@ export function createClaimEnvelope({ historyEntry, challenge, createdAt }) {
   return createEnvelope(ENVELOPE_TYPES.claim, payload, createdAt || historyEntry.stoppedAt || Date.now());
 }
 
+export function createOutcomeEnvelope({ settlement, createdAt = Date.now() }) {
+  assertPlainObject(settlement, 'Settlement');
+  return createEnvelope(ENVELOPE_TYPES.outcome, {
+    settlement: jsonClone(settlement)
+  }, createdAt);
+}
+
+export function createPaymentRequestEnvelope({ settlement, request, createdAt = Date.now() }) {
+  assertPlainObject(settlement, 'Settlement');
+  if (settlement.payment_due !== true) throw new Error('Payment request envelope requires a missed challenge with payment due.');
+  const paymentRequest = request || settlement.paymentRequests?.[0] || null;
+  const payload = {
+    settlement: jsonClone(settlement)
+  };
+  if (paymentRequest) payload.request = jsonClone(paymentRequest);
+  return createEnvelope(ENVELOPE_TYPES.paymentRequest, payload, createdAt);
+}
+
+export function createReceiptEnvelope({ settlement, paymentRequestEnvelope, markedBy, createdAt = Date.now(), note }) {
+  assertPlainObject(settlement, 'Settlement');
+  assertPlainObject(markedBy, 'Marked by');
+  const displayName = String(markedBy.displayName || markedBy.name || '').trim();
+  const npub = String(markedBy.npub || '').trim();
+  if (!displayName && !npub) throw new Error('Receipt marker displayName/name or npub is required.');
+  const payload = {
+    settlement: jsonClone(settlement),
+    marked_by: {
+      displayName,
+      npub
+    }
+  };
+  if (paymentRequestEnvelope) {
+    const envelope = parseEnvelope(paymentRequestEnvelope);
+    if (envelope.type !== ENVELOPE_TYPES.paymentRequest) throw new Error('Receipt can only link a payment request envelope.');
+    payload.payment_request_hash = envelope.envelope_hash;
+  }
+  const cleanNote = String(note || '').trim();
+  if (cleanNote) payload.note = cleanNote;
+  return createEnvelope(ENVELOPE_TYPES.receipt, payload, createdAt);
+}
+
 export function parseEnvelope(input) {
   const parsed = parseJsonInput(input, 'Envelope');
   assertPlainObject(parsed, 'Envelope');
@@ -145,12 +194,46 @@ export function createImportedProofRecord(input, { challengeId = '', importedAt 
 function parseJsonInput(input, label) {
   if (typeof input !== 'string') return input;
   const trimmed = input.trim();
-  if (!trimmed) throw new Error(`${label} JSON is required.`);
+  if (!trimmed) throw new Error(label + ' JSON is required.');
   try {
     return JSON.parse(trimmed);
   } catch {
-    throw new Error(`${label} must be valid JSON.`);
+    const extracted = extractJsonFromText(trimmed);
+    if (extracted) {
+      try {
+        return JSON.parse(extracted);
+      } catch {}
+    }
+    throw new Error(label + ' must include valid JSON.');
   }
+}
+
+function extractJsonFromText(text) {
+  const start = [...text].findIndex((char) => char === '{' || char === '[');
+  if (start < 0) return '';
+  const stack = [];
+  let inString = false;
+  let escape = false;
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (escape) escape = false;
+      else if (char === '\\') escape = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === '{' || char === '[') stack.push(char);
+    if (char === '}' || char === ']') {
+      const open = stack.pop();
+      if ((char === '}' && open !== '{') || (char === ']' && open !== '[')) return '';
+      if (!stack.length) return text.slice(start, index + 1);
+    }
+  }
+  return '';
 }
 
 function summarizeEnvelope(envelope) {
@@ -175,12 +258,55 @@ function summarizeEnvelope(envelope) {
       hash: envelope.envelope_hash
     };
   }
+  if (envelope.type === ENVELOPE_TYPES.outcome) {
+    const settlement = envelope.payload.settlement || {};
+    const challenge = settlement.challenge || {};
+    return {
+      kind: 'outcome',
+      label: `Challenge outcome: ${challenge.code || 'challenge'} ${settlement.challenge_result || 'unknown'}`,
+      challengeId: challenge.id || '',
+      challengeCode: challenge.code || '',
+      result: settlement.challenge_result || 'unknown',
+      paymentDue: settlement.payment_due,
+      hash: envelope.envelope_hash
+    };
+  }
+  if (envelope.type === ENVELOPE_TYPES.paymentRequest) {
+    const settlement = envelope.payload.settlement || {};
+    const challenge = settlement.challenge || {};
+    const request = envelope.payload.request || {};
+    const amount = request.asset === 'USDt' && request.amount ? `${request.amount.toFixed ? request.amount.toFixed(2) : request.amount} USDt` : (request.amount_sats ? `${request.amount_sats} sats` : 'manual payment');
+    return {
+      kind: 'payment-request',
+      label: `Payment request: ${challenge.code || 'challenge'} ${amount}`,
+      challengeId: challenge.id || '',
+      challengeCode: challenge.code || '',
+      result: settlement.challenge_result || 'unknown',
+      paymentDue: settlement.payment_due,
+      hash: envelope.envelope_hash
+    };
+  }
+  if (envelope.type === ENVELOPE_TYPES.receipt) {
+    const settlement = envelope.payload.settlement || {};
+    const challenge = settlement.challenge || {};
+    const markedBy = envelope.payload.marked_by || {};
+    return {
+      kind: 'receipt',
+      label: `Receipt: ${challenge.code || 'challenge'} marked by ${markedBy.displayName || markedBy.npub || 'participant'}`,
+      challengeId: challenge.id || '',
+      challengeCode: challenge.code || '',
+      result: settlement.challenge_result || 'unknown',
+      paymentRequestHash: envelope.payload.payment_request_hash || '',
+      hash: envelope.envelope_hash
+    };
+  }
   const entry = envelope.payload.historyEntry || {};
   const claim = entry.claim || {};
   const challenge = envelope.payload.challenge || {};
+  const claimant = claim.claimant_display_name || shortHash(claim.claimant_npub || '');
   return {
     kind: 'claim',
-    label: `Workout proof: ${entry.durationHuman || claim.duration_human || 'signed claim'}`,
+    label: `Workout proof: ${claimant ? `${claimant} · ` : ''}${entry.durationHuman || claim.duration_human || 'signed claim'}`,
     challengeId: entry.challengeId || claim.challenge_id || challenge.id || '',
     challengeCode: entry.challengeCode || claim.challenge_code || challenge.code || '',
     hash: envelope.envelope_hash
@@ -189,15 +315,34 @@ function summarizeEnvelope(envelope) {
 
 function summarizeLegacyProof(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  if (value.settlement_model !== 'manual-group-settlement') return null;
-  const challenge = value.challenge || {};
-  const signedClaims = Array.isArray(value.signed_claims) ? value.signed_claims : [];
-  return {
-    kind: 'challenge-proof',
-    label: `Challenge proof: ${challenge.code || 'unknown challenge'}`,
-    challengeId: challenge.id || '',
-    challengeCode: challenge.code || '',
-    localClaims: signedClaims.length,
-    result: value.challenge_result || 'unknown'
-  };
+  if (value.settlement_model === 'manual-group-settlement') {
+    const challenge = value.challenge || {};
+    const signedClaims = Array.isArray(value.signed_claims) ? value.signed_claims : [];
+    return {
+      kind: 'challenge-proof',
+      label: 'Challenge proof: ' + (challenge.code || 'unknown challenge'),
+      challengeId: challenge.id || '',
+      challengeCode: challenge.code || '',
+      localClaims: signedClaims.length,
+      result: value.challenge_result || 'unknown'
+    };
+  }
+  if (value.settlement_model === 'manual-private-settlement' && value.signed_event?.content) {
+    try {
+      const claim = parseJsonInput(value.signed_event.content, 'Signed claim');
+      const claimant = claim.claimant_display_name || shortHash(claim.claimant_npub || '');
+      return {
+        kind: 'claim',
+        label: 'Workout proof: ' + (claimant ? claimant + ' · ' : '') + (claim.duration_human || 'signed claim'),
+        challengeId: claim.challenge_id || '',
+        challengeCode: claim.challenge_code || '',
+        localClaims: 1,
+        result: 'claim'
+      };
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
+
