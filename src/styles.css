@@ -90,6 +90,21 @@ h2 { font-size: 1.35rem; line-height: 1.2; margin-bottom: 14px; letter-spacing: 
 .ghost { background: rgba(255, 255, 255, 0.82); color: var(--primary-deep); border: 1px solid var(--primary-border); }
 .danger { width: 100%; background: linear-gradient(135deg, #ff5a3d 0%, #ff8a00 100%); color: #fff; margin-top: auto; box-shadow: 0 8px 18px rgba(255, 90, 61, 0.20); }
 .danger-outline { background: #fff0e8; color: #c93424; border: 1px solid #ff9a86; }
+.burpee-finish-form {
+  position: sticky;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 5;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 2px solid rgba(255, 138, 0, 0.55);
+  border-radius: 12px;
+  background: rgba(255, 248, 234, 0.96);
+  box-shadow: 0 16px 32px rgba(23, 32, 25, 0.18);
+}
+.burpee-finish-form input { font-size: 1.2rem; text-align: center; }
+.burpee-finish-button { min-height: 64px; font-size: 1.1rem; }
+.burpee-fallback-button { min-height: 54px; opacity: 0.92; }
 .actions-row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
 .form-grid {
   display: grid;

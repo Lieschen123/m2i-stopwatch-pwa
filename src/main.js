@@ -355,12 +355,12 @@ async function beginWorkout(form, challenge = null) {
   startTimer();
 }
 
-async function finishWorkout() {
+async function finishWorkout(repCountOverride = null) {
   if (!state.activeWorkout || !state.key) return;
   const isBurpee = state.activeWorkout.activityType === 'burpees';
   let repCount = null;
   if (isBurpee) {
-    const raw = window.prompt('How many burpees did you complete?', '');
+    const raw = repCountOverride ?? window.prompt('How many burpees did you complete?', '');
     if (raw === null) return;
     const parsed = Math.max(0, Math.round(Number(raw) || 0));
     if (parsed <= 0) {
@@ -1057,8 +1057,12 @@ function renderWorkoutScreen() {
         <div class="target distance" data-distance-status>Waiting for local GPS estimate...</div>
         <div class="gps-details" data-gps-details></div>
       ` : ''}
-      ${isBurpee ? `<p class="fineprint">Daily round: 2:30 default. Voice cues announce start, 1 minute left, 30 seconds, 10 seconds, and “Time. Stop now. Enter your reps.” Then the reps prompt opens automatically.${state.activeWorkout.musicEnabled ? ' Motivation music is playing softly in the background.' : ''}</p>` : ''}
-      <button class="danger" data-action="finish">${isBurpee ? 'Stop now & enter reps' : 'Finish challenge'}</button>
+      ${isBurpee ? `<p class="fineprint">Daily round: 2:30 default. Voice cues announce start, 1 minute left, 30 seconds, 10 seconds, and “Time. Stop now. Enter your reps.” Then enter reps below and sign.${state.activeWorkout.musicEnabled ? ' Motivation music is playing softly in the background.' : ''}</p>
+      <form class="burpee-finish-form" data-form="finish-burpee-workout">
+        <label>Burpees completed<input name="repCount" inputmode="numeric" type="number" min="1" step="1" placeholder="e.g. 23" autocomplete="off"></label>
+        <button type="submit" class="danger burpee-finish-button">Sign reps & finish</button>
+      </form>` : ''}
+      <button type="button" class="danger ${isBurpee ? 'burpee-fallback-button' : ''}" data-action="finish">${isBurpee ? 'Open rep prompt instead' : 'Finish challenge'}</button>
     </section>`);
   startTimer();
   updateWorkoutClock();
@@ -1339,6 +1343,10 @@ app.addEventListener('submit', async (event) => {
     const join = store.getChallengeJoin(challenge.id);
     if (!join?.participant?.displayName) return setState({ message: 'Join this challenge with your name before starting a workout.' });
     if (window.confirm('Start workout for this challenge?')) await beginWorkout(form, challenge);
+  }
+  if (form.matches('[data-form="finish-burpee-workout"]')) {
+    const data = new FormData(form);
+    await finishWorkout(data.get('repCount'));
   }
   if (form.matches('[data-form="join-challenge"]')) {
     const challenge = store.getChallenge(form.dataset.challengeId);
