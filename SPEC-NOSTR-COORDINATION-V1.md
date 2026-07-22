@@ -278,3 +278,68 @@ Important implementation lesson:
 Updated conclusion:
 
 The Nostr/BUZZ lane is technically plausible. M2I envelopes can be carried as Nostr events without changing reducer semantics. The next decision is privacy mode and relay strategy, not proof-object design.
+
+---
+
+## 12. Privacy decision — private room first, bot-blind by design
+
+Nono's preference: start with **private room coordination**, not public brag events and not 1:1-only DMs.
+
+Decision:
+
+- One challenge/community room should show shared status to participants.
+- Participants should be able to see the board/status together.
+- The M2I bot/agent should **not** know private information by default.
+- The bot must not receive raw private envelopes, settlement instructions, health/body data, or full participant proof history unless explicitly invited for a narrow purpose.
+
+### NIP-17 clarification
+
+NIP-17 is mainly useful for private direct delivery between sender and recipient(s). If we have a real private room/group layer, NIP-17 is not necessarily the main UX primitive.
+
+Possible use of NIP-17:
+
+- fallback direct message delivery
+- coordinator-only delivery
+- pairwise encrypted fanout when no mature private-room standard exists
+
+But the desired product model is **one private room**, not many confusing 1:1 DM threads.
+
+### Bot-blind room model
+
+The room should separate two channels:
+
+1. **Private encrypted room data**
+   - Full M2I envelopes.
+   - Participant joins.
+   - Claims/proofs.
+   - Manual settlement notes.
+   - Visible only to human room members / local clients with room key access.
+
+2. **Redacted room status**
+   - Minimal derived state, e.g. participant display names or aliases, day counts, freshness, completion state.
+   - No raw proof details, payment metadata, health/body data, route, heart-rate, or private notes.
+   - This is all a bot may read by default.
+
+If the bot needs to post reminders or summaries, it should operate from redacted status events only.
+
+### Consequence
+
+A bot-blind architecture means the bot cannot be the canonical reducer for private state unless users explicitly grant it room-key access. That is acceptable.
+
+Preferred flow:
+
+1. Human clients hold/decrypt private envelopes.
+2. Human clients locally reduce full board state.
+3. A coordinator/client publishes a redacted status projection for shared convenience.
+4. Bot/agent reads only the redacted projection and can remind/summarize without seeing private proof data.
+
+### Open design question
+
+We still need to choose the concrete private-room mechanism:
+
+- mature BUZZ private room API, if available and exportable
+- Nostr group encryption, if client support is usable
+- pairwise NIP-17 fanout as fallback
+- non-Nostr private room with Nostr public/redacted projection
+
+Until that is proven, the current PWA/manual-share alpha remains the live path.
