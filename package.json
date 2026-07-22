@@ -16,7 +16,8 @@
     "prototype:holepunch:replication": "node prototypes/holepunch-sync/demo-corestore-replication.mjs",
     "prototype:holepunch:local-socket": "node prototypes/holepunch-sync/demo-corestore-local-socket.mjs",
     "prototype:holepunch:health": "node prototypes/holepunch-sync/demo-transport-health.mjs",
-    "prototype:nostr:local": "node prototypes/nostr-coordination/demo-local.mjs"
+    "prototype:nostr:local": "node prototypes/nostr-coordination/demo-local.mjs",
+    "prototype:nostr:room-status": "node prototypes/nostr-coordination/demo-room-status.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "file:/Users/lieschen/Projects/move2improve/node_modules/@noble/ciphers",

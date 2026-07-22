@@ -386,3 +386,39 @@ Acceptance criteria:
 - Projection includes challenge code, participants/aliases, day progress, freshness, and completion counts.
 - Projection excludes raw envelopes, raw proof contents, payment data, health/body data, route/heart-rate/sensor data, and settlement details.
 - Projection can be wrapped as a Nostr/BUZZ-style room status event later.
+
+---
+
+## 14. Prototype checkpoint — signed room status event
+
+Implemented the missing link:
+
+- `prototypes/nostr-coordination/room-status-events.js`
+- `prototypes/nostr-coordination/demo-room-status.mjs`
+- `tests/room-status-events.test.mjs`
+
+Added script:
+
+```bash
+npm run prototype:nostr:room-status
+```
+
+Result:
+
+```text
+✅ Room status event passed: private state → redacted status → signed room event → verified status.
+```
+
+What this proves:
+
+1. Full private M2I state can be reduced locally.
+2. The local state can be projected into a bot-safe redacted room status.
+3. That redacted status can be wrapped as a signed Nostr-style room event.
+4. The event can be verified and unwrapped without revealing raw private proof data.
+5. Status hash tags and content hash must match.
+6. Tampered event content is rejected by recomputing the Nostr event id before trusting content.
+7. Private/payment/body-data leakage is rejected before signing.
+
+This completes the first local version of the BUZZ-style architecture primitive:
+
+> Private state → redacted status → signed room event → bot-safe agent visibility.
