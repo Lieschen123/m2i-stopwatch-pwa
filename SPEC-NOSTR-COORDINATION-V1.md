@@ -463,3 +463,49 @@ Regression coverage:
 4. Handles stale/no-claim participants.
 
 This is the first human-facing artifact the optional bot/agent can safely post into a private room without seeing the underlying private proofs.
+
+---
+
+## 16. Prototype checkpoint — room onboarding messages
+
+Implemented bot-safe onboarding/explanation messages:
+
+- `prototypes/nostr-coordination/room-onboarding-messages.js`
+- `prototypes/nostr-coordination/demo-room-onboarding.mjs`
+- `tests/room-onboarding-messages.test.mjs`
+
+Added script:
+
+```bash
+npm run prototype:nostr:room-onboarding
+```
+
+Message types:
+
+1. **Welcome message**
+   - explains the private room
+   - names the shared game space
+   - explains that real proof stays private
+   - explains that the bot only sees redacted status
+
+2. **What-to-do message**
+   - phone/challenge flow
+   - start round
+   - move for agreed duration
+   - enter result honestly
+   - share/import update through private room flow
+
+3. **Repeated-game norms message**
+   - one valid day per calendar day
+   - extra attempts allowed but do not create extra days
+   - no surveillance/camera/body-data upload
+   - self-attestation + reputation
+   - say early if something breaks
+
+Result:
+
+```text
+✅ Room onboarding messages passed: welcome, instructions, repeated-game norms.
+```
+
+Tests verify all messages avoid private/proof/payment/body-data leakage language.
