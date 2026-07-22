@@ -343,3 +343,46 @@ We still need to choose the concrete private-room mechanism:
 - non-Nostr private room with Nostr public/redacted projection
 
 Until that is proven, the current PWA/manual-share alpha remains the live path.
+
+---
+
+## 13. BUZZ stance — build the architecture now, integrate later
+
+Current read after checking the BUZZ launch feed:
+
+- BUZZ is strategically aligned: Nostr, group chat, humans + agents, open-source/self-sovereign direction.
+- BUZZ is also very early: public feedback already says onboarding/setup/admin UX is confusing, and Jack replied that they shipped early and will improve onboarding by learning.
+- Therefore M2I should **not** depend on BUZZ for the Runner 2 alpha or near-term user onboarding.
+
+Decision:
+
+Build the architecture we want independently:
+
+> Private room/local truth → redacted shared status → optional bot/agent.
+
+Then, if BUZZ matures, BUZZ can become a host shell for the room/status/events.
+
+### First-mover wedge
+
+The differentiated thing is not just a challenge app. The wedge is:
+
+> private coordination for humans + agents where the agent can help without receiving the secrets.
+
+For M2I this means:
+
+1. Full private M2I envelopes live with humans/local clients/private room.
+2. Local clients reduce the true board state.
+3. A bot-safe redacted status projection is emitted to the room.
+4. Bot/agent can summarize/remind/nudge from that projection only.
+5. The bot stays useful but blind.
+
+Next build target:
+
+- `prototypes/nostr-coordination/private-room-projection.js`
+- `tests/private-room-projection.test.mjs`
+
+Acceptance criteria:
+
+- Projection includes challenge code, participants/aliases, day progress, freshness, and completion counts.
+- Projection excludes raw envelopes, raw proof contents, payment data, health/body data, route/heart-rate/sensor data, and settlement details.
+- Projection can be wrapped as a Nostr/BUZZ-style room status event later.
