@@ -670,3 +670,53 @@ Tests prove:
 Decision:
 
 This is the durable privacy boundary M2I needed. BUZZ can host the room message, but M2I owns proof secrecy. The bot can stay useful from redacted status without receiving the room key.
+
+---
+
+## 20. Prototype checkpoint — private room flow bridge
+
+Implemented the full local bridge from encrypted private proofs to bot-safe room updates:
+
+- `prototypes/nostr-coordination/private-room-flow.js`
+- `prototypes/nostr-coordination/demo-private-room-flow.mjs`
+- `tests/private-room-flow.test.mjs`
+
+Added script:
+
+```bash
+npm run prototype:nostr:private-room-flow
+```
+
+Result:
+
+```text
+✅ Private room flow passed: encrypted proofs → decrypt/import queue → reduce → redacted status + BUZZ message.
+```
+
+The bridge connects all previously built primitives:
+
+1. encrypted private proof events
+2. room-key member decrypt
+3. dedupe by canonical `envelope_hash`
+4. deterministic reducer
+5. bot-safe status projection
+6. signed redacted room status event
+7. human-readable status message
+8. BUZZ-compatible `kind:9` room status wrapper
+
+Important behavior:
+
+- Duplicate private proof events are accepted but do not duplicate canonical envelopes.
+- Undecryptable events from bot/non-member/wrong room key are dead-lettered, not fatal.
+- Non-private-proof/noise events are dead-lettered.
+- Bot-visible artifacts are tested not to leak raw envelope hashes, raw proof/history payloads, sender aliases, payment terms, heart/body data, or GPS terms.
+
+Decision:
+
+The local M2I V2 coordination loop is now complete enough to reason about product/UI separately from transport:
+
+```text
+activity proof → encrypted room event → member local reduce → signed redacted status → bot-safe room message
+```
+
+BUZZ can be one transport adapter for the room messages, but M2I remains transport-independent and owns the private proof boundary.
