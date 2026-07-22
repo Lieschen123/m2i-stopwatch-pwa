@@ -20,3 +20,6 @@ dist/test-alex.html
 
 # Holepunch prototype local storage
 prototypes/holepunch-sync/.data/
+
+prototypes/holepunch-sync/.data-hypercore/
+prototypes/holepunch-sync/.data-hypercore-deterministic/

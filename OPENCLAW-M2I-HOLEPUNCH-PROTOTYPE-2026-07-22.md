@@ -128,3 +128,41 @@ Phase 2 should add append-only storage:
    - confirm both converge without duplicates.
 
 Only after that should we consider Pear UI/runtime packaging.
+
+---
+
+## Phase 2 update — Hypercore persistence
+
+Added Hypercore-backed peer storage:
+
+- `prototypes/holepunch-sync/hypercore-peer.js`
+- `prototypes/holepunch-sync/demo-persistence.mjs`
+
+Added script:
+
+```bash
+npm run prototype:holepunch:persistence
+```
+
+Result:
+
+```text
+✅ Hypercore persistence passed: reopen, dedupe, append one new envelope, converge.
+```
+
+What it proves:
+
+1. Each peer can persist signed M2I envelopes to an append-only Hypercore log.
+2. Peers can reopen the same local logs after restart.
+3. Existing envelopes are deduped by `envelope_hash`.
+4. Appending one new claim after restart adds exactly one new envelope.
+5. The deterministic reducer converges to the same board state after sync.
+
+Caveat found:
+
+The live `demo-restart.mjs` path, Hypercore + Hyperswarm after process-level restart, exposed local swarm reconnect timing flakiness. Sometimes peers join the topic but no socket opens quickly enough for live update propagation. This is useful signal: production design needs explicit connection state, retry/backoff, and probably Hypercore replication streams rather than ad-hoc JSON line rebroadcast.
+
+Updated recommendation:
+
+- Phase 2 storage/dedupe is proven.
+- Phase 3 should replace ad-hoc JSON-line rebroadcast with proper Hypercore replication over Hyperswarm sockets, plus connection retry/backoff and observable sync status.
