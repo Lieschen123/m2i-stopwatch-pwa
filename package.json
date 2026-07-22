@@ -21,7 +21,8 @@
     "prototype:nostr:room-message": "node prototypes/nostr-coordination/demo-room-message.mjs",
     "prototype:nostr:room-onboarding": "node prototypes/nostr-coordination/demo-room-onboarding.mjs",
     "prototype:nostr:room-starter-pack": "node prototypes/nostr-coordination/demo-room-starter-pack.mjs",
-    "prototype:nostr:buzz-adapter": "node prototypes/nostr-coordination/demo-buzz-room-adapter.mjs"
+    "prototype:nostr:buzz-adapter": "node prototypes/nostr-coordination/demo-buzz-room-adapter.mjs",
+    "prototype:nostr:private-proof": "node prototypes/nostr-coordination/demo-private-proof-events.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "file:/Users/lieschen/Projects/move2improve/node_modules/@noble/ciphers",

@@ -622,3 +622,51 @@ Adapter decision:
 Privacy consequence:
 
 A BUZZ private room is enough for shared redacted status UX, but not enough for private proof automation unless payloads are encrypted before posting. The next durable step remains `private-proof-events.js`: M2I-encrypted proof payloads over BUZZ/Nostr-style room messages, with bot unable to decrypt.
+
+---
+
+## 19. Prototype checkpoint — private proof events
+
+Implemented the missing bot-blind proof automation boundary:
+
+- `prototypes/nostr-coordination/private-proof-events.js`
+- `prototypes/nostr-coordination/demo-private-proof-events.mjs`
+- `tests/private-proof-events.test.mjs`
+
+Added script:
+
+```bash
+npm run prototype:nostr:private-proof
+```
+
+Result:
+
+```text
+✅ Private proof events passed: encrypted proof → member decrypt/reduce → bot cannot decrypt.
+```
+
+Private proof event shape:
+
+- Uses BUZZ/Nostr-room-compatible `kind:9` by default.
+- Uses `['h', '<channel_uuid>']` when a BUZZ channel id is available.
+- Tags identify the event as M2I encrypted room proof:
+  - `m2i_private_proof=v1`
+  - `m2i_message_type=m2i.private_proof_event.v1`
+  - `privacy=room-encrypted`
+- Content uses `xchacha20poly1305-v1` with a 32-byte room key and 24-byte nonce.
+- Cleartext metadata is intentionally minimal: room/channel/challenge routing only.
+- Sender alias, envelope type, raw envelope hash, and proof body stay encrypted.
+
+Tests prove:
+
+1. Full M2I envelopes wrap into encrypted private room events.
+2. Event content does not expose raw `envelope_hash`, `historyEntry`, `sender_alias`, `envelope_type`, or participant names.
+3. A room member can decrypt and recover the exact canonical envelope.
+4. A bot/non-member with the wrong room key cannot decrypt.
+5. Decrypted events reduce to the same board state as raw M2I envelopes.
+6. Redacted status emitted after local reduce remains bot-safe.
+7. Tampered event content is rejected before decrypting by recomputing the Nostr event id and verifying the signature.
+
+Decision:
+
+This is the durable privacy boundary M2I needed. BUZZ can host the room message, but M2I owns proof secrecy. The bot can stay useful from redacted status without receiving the room key.
