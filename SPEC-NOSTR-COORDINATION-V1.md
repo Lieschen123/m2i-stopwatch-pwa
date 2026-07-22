@@ -573,3 +573,52 @@ Result:
 ```
 
 This is the first complete artifact a future private room/BUZZ/Nostr room could receive when a challenge starts.
+
+---
+
+## 18. Prototype checkpoint — BUZZ room adapter
+
+Ran a focused BUZZ source/docs spike against `block/buzz`.
+
+Key BUZZ findings:
+
+- BUZZ channel/room messages use Nostr-style events with `kind:9` (`KIND_STREAM_MESSAGE`) and an `h` tag containing the channel UUID.
+- BUZZ also defines `kind:40002` for stream message v2, but its SDK `build_message()` currently uses `kind:9`.
+- BUZZ relays appear to enforce a known-kind allowlist, so raw M2I `kind:30316` events should not be assumed accepted by BUZZ.
+- BUZZ private channels have membership-gated fanout and query behavior, but this is access control, not end-to-end payload secrecy.
+- Therefore M2I private proof secrecy must still be owned by M2I unless BUZZ later exposes a proven encrypted-room payload API.
+
+Implemented a local adapter:
+
+- `prototypes/nostr-coordination/buzz-room-adapter.js`
+- `prototypes/nostr-coordination/demo-buzz-room-adapter.mjs`
+- `tests/buzz-room-adapter.test.mjs`
+
+Added script:
+
+```bash
+npm run prototype:nostr:buzz-adapter
+```
+
+Result:
+
+```text
+✅ BUZZ room adapter passed: M2I starter pack wrapped as kind:9 channel message with h tag.
+```
+
+Adapter decision:
+
+- For BUZZ room posting, wrap M2I room status/starter-pack artifacts as BUZZ `kind:9` channel messages.
+- Put BUZZ routing metadata in tags:
+  - `['h', '<channel_uuid>']`
+  - `['m2i', 'v1']`
+  - `['m2i_buzz_adapter', '1']`
+  - `['m2i_message_type', 'm2i.buzz.status_message.v1' | 'm2i.buzz.starter_pack.v1']`
+  - `['status_hash', '<hash>']`
+  - `['challenge_code', '<code>']`
+- Put the signed M2I status event/starter pack inside canonical JSON content.
+- Treat the BUZZ event id as transport/audit metadata. The signed M2I status event and `status_hash` remain the M2I integrity boundary.
+
+Privacy consequence:
+
+A BUZZ private room is enough for shared redacted status UX, but not enough for private proof automation unless payloads are encrypted before posting. The next durable step remains `private-proof-events.js`: M2I-encrypted proof payloads over BUZZ/Nostr-style room messages, with bot unable to decrypt.
