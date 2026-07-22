@@ -25,3 +25,4 @@ prototypes/holepunch-sync/.data-hypercore/
 prototypes/holepunch-sync/.data-hypercore-deterministic/
 prototypes/holepunch-sync/.data-corestore-replication/
 prototypes/holepunch-sync/.data-corestore-local-socket/
+prototypes/holepunch-sync/.data-transport-health/

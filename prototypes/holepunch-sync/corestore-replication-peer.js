@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import Corestore from 'corestore';
@@ -43,6 +44,13 @@ export class M2ICorestoreReplicationPeer {
     this.writerKeyHex = '';
     this.remoteCores = new Map();
     this.knownWriterKeys = new Set(loadJson(this.knownWritersFile, []));
+    this.health = {
+      status: 'disconnected',
+      lastConnectionAt: null,
+      lastSyncAt: null,
+      lastError: null,
+      lastStateHash: null
+    };
     ensureDir(storageDir);
   }
 
@@ -116,16 +124,70 @@ export class M2ICorestoreReplicationPeer {
     return reduceEnvelopes(await this.allEnvelopes());
   }
 
+  async stateSummary() {
+    const state = await this.state();
+    return {
+      participantCount: state.participantCount,
+      claimCount: state.claimCount,
+      seenCount: state.seen.length,
+      stateHash: crypto.createHash('sha256').update(JSON.stringify(state)).digest('hex')
+    };
+  }
+
+  async refreshHealth({ expectedClaimCount = null } = {}) {
+    const summary = await this.stateSummary();
+    this.health.lastStateHash = summary.stateHash;
+    if (this.sockets.size === 0 && this.health.status !== 'discovering') {
+      this.health.status = this.health.lastConnectionAt ? 'stale' : 'disconnected';
+    }
+    if (expectedClaimCount !== null && summary.claimCount >= expectedClaimCount) {
+      this.health.status = 'synced';
+      this.health.lastSyncAt = new Date().toISOString();
+    }
+    return this.healthStatus(summary);
+  }
+
+  healthStatus(summary = null) {
+    return {
+      name: this.name,
+      roomId: this.roomId,
+      writer: this.writerKeyHex,
+      status: this.health.status,
+      connectionCount: this.sockets.size,
+      knownWriterCount: this.knownWriterKeys.size,
+      remoteCoreCount: this.remoteCores.size,
+      lastConnectionAt: this.health.lastConnectionAt,
+      lastSyncAt: this.health.lastSyncAt,
+      lastError: this.health.lastError,
+      state: summary
+    };
+  }
+
+  markError(error) {
+    this.health.status = 'stale';
+    this.health.lastError = error.message || String(error);
+  }
+
+  trackSocket(socket) {
+    if (this.sockets.has(socket)) return;
+    this.sockets.add(socket);
+    this.health.status = 'connected';
+    this.health.lastConnectionAt = new Date().toISOString();
+    console.log(`[${this.name}] replication socket opened sockets=${this.sockets.size}`);
+    socket.on('close', () => {
+      this.sockets.delete(socket);
+      if (this.sockets.size === 0 && this.health.status !== 'disconnected') this.health.status = 'stale';
+      console.log(`[${this.name}] replication socket closed sockets=${this.sockets.size}`);
+    });
+  }
+
   async start() {
     const topic = roomTopic(this.roomId);
+    this.health.status = 'discovering';
     this.swarm.on('connection', (socket, info = {}) => {
-      this.sockets.add(socket);
-      console.log(`[${this.name}] replication socket opened sockets=${this.sockets.size}`);
-      socket.on('close', () => {
-        this.sockets.delete(socket);
-        console.log(`[${this.name}] replication socket closed sockets=${this.sockets.size}`);
-      });
+      this.trackSocket(socket);
       this.bootstrapReplicationSocket(socket, Boolean(info.client)).catch((error) => {
+        this.markError(error);
         console.error(`[${this.name}] replication socket failed: ${error.message}`);
         socket.destroy();
       });
@@ -137,6 +199,8 @@ export class M2ICorestoreReplicationPeer {
   }
 
   async bootstrapReplicationSocket(socket, isInitiator) {
+    this.trackSocket(socket);
+    this.health.status = 'syncing';
     socket.write(`${JSON.stringify({ kind: 'm2i-writer-key', key: this.writerKeyHex })}\n`);
     const { message, rest } = await this.readFirstJsonLine(socket);
     if (message?.kind !== 'm2i-writer-key') throw new Error('missing remote writer key');
@@ -145,6 +209,7 @@ export class M2ICorestoreReplicationPeer {
     const replication = this.store.replicate(isInitiator, { live: true });
     replication.on('error', (error) => {
       if (String(error.message || '').includes('Writable stream closed')) return;
+      this.markError(error);
       console.error(`[${this.name}] replication error: ${error.message}`);
     });
     socket.pipe(replication).pipe(socket);
@@ -177,6 +242,7 @@ export class M2ICorestoreReplicationPeer {
   }
 
   async stop() {
+    this.health.status = 'disconnected';
     for (const socket of this.sockets) socket.destroy();
     await this.swarm.destroy();
     await this.store.close();

@@ -212,3 +212,47 @@ Build a transport health layer:
 - periodic reannounce/rejoin
 - sync timeout and user-visible status
 - later: test on two real devices/networks or Pear runtime, not only two local processes
+
+---
+
+## Phase 4 update — Transport health layer
+
+Added observable sync status to `M2ICorestoreReplicationPeer`:
+
+- `disconnected`
+- `discovering`
+- `connected`
+- `syncing`
+- `synced`
+- `stale`
+
+Added methods:
+
+- `healthStatus()`
+- `refreshHealth({ expectedClaimCount })`
+- `stateSummary()`
+- `markError(error)`
+- `trackSocket(socket)`
+
+Added script:
+
+```bash
+npm run prototype:holepunch:health
+```
+
+Result:
+
+```text
+✅ Transport health passed: disconnected → syncing → synced with observable status.
+```
+
+What it proves:
+
+1. Before transport, peers report `disconnected` and expose local reducer state.
+2. During socket connection, peers track live socket count and writer-key discovery.
+3. After replication, peers report `synced`, matching state hash, writer counts, seen count, participant count, and claim count.
+4. This is the minimal status surface needed for a future Pear/local UI: users should see whether sync is disconnected, discovering, syncing, synced, or stale.
+
+Next step:
+
+Add retry/backoff/reannounce around Hyperswarm discovery so the live DHT demo can move from diagnostic to reliable.
