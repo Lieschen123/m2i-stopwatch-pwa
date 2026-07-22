@@ -21,11 +21,12 @@ test('welcome message explains private-room purpose and bot-blindness', () => {
   assert.match(message, /RUNNER2-DAILY-BURPEES/);
   assert.match(message, /Welcome to the room/);
   assert.match(message, /Nono and Runner 2/);
-  assert.match(message, /not a trustless game/);
-  assert.match(message, /repeated game/);
-  assert.match(message, /every honest update builds reputation/);
-  assert.match(message, /every excuse creates a pattern/);
-  assert.match(message, /visible without surveillance/);
+  assert.match(message, /Built for repeated games/);
+  assert.match(message, /cooperation becomes the dominant strategy/);
+  assert.match(message, /Not kindness/);
+  assert.match(message, /Pure math/);
+  assert.match(message, /repeated games do to isolated incentives/);
+  assert.match(message, /turns rivalry into contribution/);
   assert.match(message, /real proof stays private/);
   assert.match(message, /bot only sees the redacted status summary/i);
   assert.match(message, /Difficulty adjusts/);

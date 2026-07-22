@@ -514,10 +514,16 @@ Tests verify all messages avoid private/proof/payment/body-data leakage language
 
 Nono clarified that the repeated-game explanation should be part of the first welcome message, not only a separate follow-up.
 
-The welcome message now foregrounds the game-theory core:
+The welcome message now foregrounds the canonical game-theory core:
 
 ```text
-This is not a trustless game. It is a repeated game: every honest update builds reputation, every excuse creates a pattern, and the room makes the pattern visible without surveillance.
+Built for repeated games.
+
+When you know you'll meet again tomorrow, cooperation becomes the dominant strategy. Not kindness. Not idealism. Pure math.
+
+“We are all one” is not a spiritual wish. It is what repeated games do to isolated incentives.
+
+Move2Improve turns rivalry into contribution.
 ```
 
-This makes the trust model clear immediately when someone enters the room: M2I does not need surveillance because repeated-game reputation does the social work.
+This makes the trust model clear immediately when someone enters the room: M2I does not need surveillance because repeated-game incentives and visible local status do the social work.
