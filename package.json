@@ -12,7 +12,9 @@
     "test": "node --test tests/*.test.mjs",
     "prototype:holepunch": "node prototypes/holepunch-sync/demo-local.mjs",
     "prototype:holepunch:restart": "node prototypes/holepunch-sync/demo-restart.mjs",
-    "prototype:holepunch:persistence": "node prototypes/holepunch-sync/demo-persistence.mjs"
+    "prototype:holepunch:persistence": "node prototypes/holepunch-sync/demo-persistence.mjs",
+    "prototype:holepunch:replication": "node prototypes/holepunch-sync/demo-corestore-replication.mjs",
+    "prototype:holepunch:local-socket": "node prototypes/holepunch-sync/demo-corestore-local-socket.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "file:/Users/lieschen/Projects/move2improve/node_modules/@noble/ciphers",
@@ -22,6 +24,7 @@
     "@scure/bip32": "file:/Users/lieschen/Projects/move2improve/node_modules/@scure/bip32",
     "@scure/bip39": "file:/Users/lieschen/Projects/move2improve/node_modules/@scure/bip39",
     "b4a": "^1.8.1",
+    "corestore": "^7.11.1",
     "hypercore": "^11.34.1",
     "hyperswarm": "^4.17.0",
     "nostr-tools": "file:/Users/lieschen/Projects/move2improve/node_modules/nostr-tools",

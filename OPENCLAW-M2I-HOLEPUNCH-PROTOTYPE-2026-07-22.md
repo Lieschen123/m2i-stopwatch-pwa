@@ -166,3 +166,49 @@ Updated recommendation:
 
 - Phase 2 storage/dedupe is proven.
 - Phase 3 should replace ad-hoc JSON-line rebroadcast with proper Hypercore replication over Hyperswarm sockets, plus connection retry/backoff and observable sync status.
+
+---
+
+## Phase 3 update — Corestore replication streams
+
+Added proper Corestore replication peer and real-socket demo:
+
+- `prototypes/holepunch-sync/corestore-replication-peer.js`
+- `prototypes/holepunch-sync/demo-corestore-local-socket.mjs`
+- `prototypes/holepunch-sync/demo-corestore-replication.mjs`
+
+Added scripts:
+
+```bash
+npm run prototype:holepunch:local-socket
+npm run prototype:holepunch:replication
+```
+
+Result for release-gated path:
+
+```text
+✅ Corestore replication over real sockets passed: restart, dedupe, append, converge.
+```
+
+What it proves:
+
+1. Each peer owns a local writer core in a Corestore.
+2. Peers exchange writer keys over a socket handshake.
+3. Corestore replication streams move append-only envelope logs.
+4. After restart, both peers reload existing writer keys and logs.
+5. Appending one new envelope after restart syncs to the other peer.
+6. The reducer converges without duplicate envelopes.
+
+Remaining issue:
+
+The same Corestore replication code wired to live Hyperswarm (`prototype:holepunch:replication`) still exposes local discovery timing flakiness: peers can join the room topic without opening a socket quickly. This is now isolated to discovery/connectivity, not the M2I envelope reducer or Corestore replication model.
+
+Next step:
+
+Build a transport health layer:
+
+- explicit connection state (`disconnected`, `discovering`, `connected`, `syncing`, `synced`, `stale`)
+- retry/backoff for Hyperswarm discovery
+- periodic reannounce/rejoin
+- sync timeout and user-visible status
+- later: test on two real devices/networks or Pear runtime, not only two local processes
