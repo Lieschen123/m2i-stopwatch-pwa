@@ -17,3 +17,6 @@ USER.md
 # Local one-off test redirect pages
 public/test-alex.html
 dist/test-alex.html
+
+# Holepunch prototype local storage
+prototypes/holepunch-sync/.data/
