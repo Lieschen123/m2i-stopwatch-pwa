@@ -241,3 +241,40 @@ Reason:
 **Strong architecture line:**
 
 > M2I does not choose a network first. M2I chooses a proof object first, then lets the best network carry it.
+
+---
+
+## 11. Prototype checkpoint — 2026-07-22
+
+Implemented the local no-network prototype:
+
+- `prototypes/nostr-coordination/nostr-envelope-events.js`
+- `prototypes/nostr-coordination/demo-local.mjs`
+- `tests/nostr-coordination.test.mjs`
+
+Added script:
+
+```bash
+npm run prototype:nostr:local
+```
+
+Result:
+
+```text
+✅ Nostr coordination prototype passed: wrap → unwrap → same M2I board state.
+```
+
+Regression coverage:
+
+1. Raw M2I envelopes and Nostr-wrapped envelopes reduce to identical board state.
+2. Nostr tags expose transport metadata while `envelope_hash` remains canonical proof id.
+3. Tag/content mismatch is rejected.
+4. Tampered event content is rejected by recomputing the Nostr event hash before trusting content.
+
+Important implementation lesson:
+
+`verifyEvent(event)` alone was not enough for our trust boundary in this local test. The wrapper now explicitly checks `getEventHash(event) === event.id` before accepting the event signature/content pair.
+
+Updated conclusion:
+
+The Nostr/BUZZ lane is technically plausible. M2I envelopes can be carried as Nostr events without changing reducer semantics. The next decision is privacy mode and relay strategy, not proof-object design.
