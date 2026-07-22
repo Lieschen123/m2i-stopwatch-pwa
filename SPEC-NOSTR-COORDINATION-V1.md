@@ -422,3 +422,44 @@ What this proves:
 This completes the first local version of the BUZZ-style architecture primitive:
 
 > Private state → redacted status → signed room event → bot-safe agent visibility.
+
+---
+
+## 15. Prototype checkpoint — human-readable room status message
+
+Implemented readable bot-safe room messages:
+
+- `prototypes/nostr-coordination/room-status-format.js`
+- `prototypes/nostr-coordination/demo-room-message.mjs`
+- `tests/room-status-format.test.mjs`
+
+Added script:
+
+```bash
+npm run prototype:nostr:room-message
+```
+
+Example output:
+
+```text
+RUNNER2-DAILY-BURPEES
+Activity: burpees · Round: 150s
+
+Day status:
+✅ Nono — 1/14 days, latest: 2026-07-22
+✅ Runner 2 — 1/14 days, latest: 2026-07-22
+
+2 claims counted.
+Nobody has completed the challenge yet.
+
+Bot-safe summary only. Private proofs stay in the room/local clients.
+```
+
+Regression coverage:
+
+1. Formats normal active participants.
+2. Does not leak private proof/payment/body-data words.
+3. Handles complete and partially complete challenge states.
+4. Handles stale/no-claim participants.
+
+This is the first human-facing artifact the optional bot/agent can safely post into a private room without seeing the underlying private proofs.
