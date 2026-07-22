@@ -29,7 +29,8 @@ test('welcome message explains private-room purpose and bot-blindness', () => {
   assert.match(message, /turns rivalry into contribution/);
   assert.match(message, /real proof stays private/);
   assert.match(message, /bot only sees the redacted status summary/i);
-  assert.match(message, /Difficulty adjusts/);
+  assert.match(message, /Show up again tomorrow/);
+  assert.doesNotMatch(message, /Difficulty adjusts/);
   assertNoPrivateLeak(message);
 });
 

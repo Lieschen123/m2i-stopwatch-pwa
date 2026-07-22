@@ -527,3 +527,17 @@ Move2Improve turns rivalry into contribution.
 ```
 
 This makes the trust model clear immediately when someone enters the room: M2I does not need surveillance because repeated-game incentives and visible local status do the social work.
+
+### 16.2 Tagline correction
+
+Nono clarified that `DIFFICULTY ADJUSTS. DO YOU?` is not valid enough for this private-room repeated-games welcome.
+
+Decision:
+
+- Keep the tagline available for Move2Improve brand/merch contexts.
+- Do **not** use it as the closing line for the Nostr/BUZZ private-room welcome.
+- Use the more precise room ending: `Play honestly. Keep it light. Show up again tomorrow.`
+
+Reason:
+
+This room is about repeated-game cooperation and visible patterns without surveillance, not difficulty-adjustment branding.
