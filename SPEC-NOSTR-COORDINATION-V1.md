@@ -514,10 +514,10 @@ Tests verify all messages avoid private/proof/payment/body-data leakage language
 
 Nono clarified that the repeated-game explanation should be part of the first welcome message, not only a separate follow-up.
 
-The welcome message now includes:
+The welcome message now foregrounds the game-theory core:
 
 ```text
-This works because it is a repeated game: you are not proving yourself to a surveillance machine, you are showing up over time with people who can see the pattern.
+This is not a trustless game. It is a repeated game: every honest update builds reputation, every excuse creates a pattern, and the room makes the pattern visible without surveillance.
 ```
 
-This makes the trust model clear immediately when someone enters the room.
+This makes the trust model clear immediately when someone enters the room: M2I does not need surveillance because repeated-game reputation does the social work.
