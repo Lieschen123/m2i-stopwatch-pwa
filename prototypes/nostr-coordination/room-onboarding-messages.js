@@ -20,7 +20,7 @@ function participantNames(status) {
 
 export function formatWelcomeMessage(status) {
   assertBotSafeRoomStatus(status);
-  return `${challengeTitle(status)}\n${activityLine(status)}\n\nWelcome to the room. This is the shared game space for ${participantNames(status)}.\n\nThe important part: your real proof stays private. Your device or room client keeps the full signed M2I receipts. The bot only sees the redacted status summary, enough to remind and motivate, not enough to inspect your private data.\n\nPlay honestly. Keep it light. Difficulty adjusts. Do you?`;
+  return `${challengeTitle(status)}\n${activityLine(status)}\n\nWelcome to the room. This is the shared game space for ${participantNames(status)}.\n\nThis works because it is a repeated game: you are not proving yourself to a surveillance machine, you are showing up over time with people who can see the pattern.\n\nThe important part: your real proof stays private. Your device or room client keeps the full signed M2I receipts. The bot only sees the redacted status summary, enough to remind and motivate, not enough to inspect your private data.\n\nPlay honestly. Keep it light. Difficulty adjusts. Do you?`;
 }
 
 export function formatWhatToDoMessage(status) {

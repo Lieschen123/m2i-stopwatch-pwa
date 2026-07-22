@@ -21,6 +21,9 @@ test('welcome message explains private-room purpose and bot-blindness', () => {
   assert.match(message, /RUNNER2-DAILY-BURPEES/);
   assert.match(message, /Welcome to the room/);
   assert.match(message, /Nono and Runner 2/);
+  assert.match(message, /repeated game/);
+  assert.match(message, /not proving yourself to a surveillance machine/);
+  assert.match(message, /people who can see the pattern/);
   assert.match(message, /real proof stays private/);
   assert.match(message, /bot only sees the redacted status summary/i);
   assert.match(message, /Difficulty adjusts/);

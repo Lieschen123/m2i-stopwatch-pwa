@@ -509,3 +509,15 @@ Result:
 ```
 
 Tests verify all messages avoid private/proof/payment/body-data leakage language.
+
+### 16.1 Welcome message correction
+
+Nono clarified that the repeated-game explanation should be part of the first welcome message, not only a separate follow-up.
+
+The welcome message now includes:
+
+```text
+This works because it is a repeated game: you are not proving yourself to a surveillance machine, you are showing up over time with people who can see the pattern.
+```
+
+This makes the trust model clear immediately when someone enters the room.
