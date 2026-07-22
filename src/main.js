@@ -750,11 +750,15 @@ function renderChallengeScreen() {
         <button class="secondary" data-action="copy-invite">Copy invite</button>
         <button class="secondary" data-action="copy-challenge-settlement">Copy challenge proof</button>
       </div>
-      <form class="stack" data-form="import-proof" data-challenge-id="${escapeHtml(challenge.id)}">
-        <label>Import copied proof<textarea name="proofJson" rows="5" placeholder="Paste a copied M2I proof or envelope JSON"></textarea></label>
-        <button type="submit" class="secondary">Import proof</button>
-        <p class="fineprint">Imported proofs stay local on this device and do not change your signed workout history.</p>
-      </form>
+      <details class="advanced-proof coordinator-tools">
+        <summary>Coordinator tools: import participant proof</summary>
+        <p class="fineprint">Only the challenge coordinator needs this. Participants should use Start, enter reps, then share their proof/update in the group chat.</p>
+        <form class="stack" data-form="import-proof" data-challenge-id="${escapeHtml(challenge.id)}">
+          <label>Paste participant proof<textarea name="proofJson" rows="5" placeholder="Paste a copied M2I proof/update from another participant"></textarea></label>
+          <button type="submit" class="secondary">Import participant proof</button>
+          <p class="fineprint">Imported proofs stay local on this coordinator device and do not change your signed workout history.</p>
+        </form>
+      </details>
       ${linked.length ? `<section class="stack"><h3>Local claims</h3>${linked.map((entry) => `<article class="history-item"><div><strong>${escapeHtml(entry.durationHuman)}</strong><span>${new Date(entry.stoppedAt).toLocaleString()}</span></div><span>${entry.claim.distance_km !== undefined ? `${entry.claim.distance_km.toFixed(3)} km` : 'duration only'}</span><button class="ghost" data-action="open-claim" data-claim-id="${escapeHtml(entry.id)}">Open</button></article>`).join('')}</section>` : '<p class="muted">No local workout claims yet.</p>'}
       <details class="advanced-proof"><summary>Advanced settlement JSON</summary><textarea class="json-output" readonly rows="8">${escapeHtml(JSON.stringify(proofSettlement(settlement), null, 2))}</textarea></details>
       <button class="ghost" data-action="home">Back</button>
