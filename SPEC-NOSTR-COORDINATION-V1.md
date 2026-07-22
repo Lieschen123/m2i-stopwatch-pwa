@@ -541,3 +541,35 @@ Decision:
 Reason:
 
 This room is about repeated-game cooperation and visible patterns without surveillance, not difficulty-adjustment branding.
+
+---
+
+## 17. Prototype checkpoint — room starter pack
+
+Implemented the first room-creation primitive:
+
+- `prototypes/nostr-coordination/room-starter-pack.js`
+- `prototypes/nostr-coordination/demo-room-starter-pack.mjs`
+- `tests/room-starter-pack.test.mjs`
+
+Added script:
+
+```bash
+npm run prototype:nostr:room-starter-pack
+```
+
+The starter pack bundles:
+
+1. welcome message
+2. what-to-do message
+3. repeated-game norms message
+4. signed bot-safe status event
+5. human-readable status message
+
+Result:
+
+```text
+✅ Room starter pack passed: welcome + instructions + norms + signed status + status message.
+```
+
+This is the first complete artifact a future private room/BUZZ/Nostr room could receive when a challenge starts.

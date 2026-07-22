@@ -19,7 +19,8 @@
     "prototype:nostr:local": "node prototypes/nostr-coordination/demo-local.mjs",
     "prototype:nostr:room-status": "node prototypes/nostr-coordination/demo-room-status.mjs",
     "prototype:nostr:room-message": "node prototypes/nostr-coordination/demo-room-message.mjs",
-    "prototype:nostr:room-onboarding": "node prototypes/nostr-coordination/demo-room-onboarding.mjs"
+    "prototype:nostr:room-onboarding": "node prototypes/nostr-coordination/demo-room-onboarding.mjs",
+    "prototype:nostr:room-starter-pack": "node prototypes/nostr-coordination/demo-room-starter-pack.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "file:/Users/lieschen/Projects/move2improve/node_modules/@noble/ciphers",
