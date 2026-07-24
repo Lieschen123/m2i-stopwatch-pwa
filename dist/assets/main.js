@@ -232,11 +232,13 @@ Mia"></textarea></label>
       <div class="actions-row">
         <button class="primary" data-action="board">\u{1F4CA} Open Board</button>
         <button class="secondary" data-action="copy-invite">Copy invite</button>
-        <button class="secondary" data-action="copy-challenge-settlement">Copy challenge proof</button>
       </div>
       <details class="advanced-proof coordinator-tools">
-        <summary>Coordinator tools: import participant proof</summary>
-        <p class="fineprint">Only the challenge coordinator needs this. Participants should use Start, enter reps, then share their proof/update in the group chat.</p>
+        <summary>Advanced / coordinator tools (temporary alpha)</summary>
+        <p class="fineprint">Temporary bridge until private sync is automated. Normal participants should use Start, enter reps, then share the simple update in the group chat.</p>
+        <div class="actions-row">
+          <button class="secondary" data-action="copy-challenge-settlement">Copy challenge proof</button>
+        </div>
         <form class="stack" data-form="import-proof" data-challenge-id="${R(e.id)}">
           <label>Paste participant proof<textarea name="proofJson" rows="5" placeholder="Paste a copied M2I proof/update from another participant"></textarea></label>
           <button type="submit" class="secondary">Import participant proof</button>
