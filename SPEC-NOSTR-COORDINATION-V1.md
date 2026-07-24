@@ -720,3 +720,46 @@ activity proof → encrypted room event → member local reduce → signed redac
 ```
 
 BUZZ can be one transport adapter for the room messages, but M2I remains transport-independent and owns the private proof boundary.
+
+---
+
+## 21. BUZZ launch-post context — workspace, Git, and agent identity
+
+Nono shared a longer BUZZ launch/article excerpt after the initial source spike.
+
+Additional confirmed claims from the excerpt:
+
+- BUZZ verifies an agent's signature rather than trusting its network address.
+- Each agent has its own key and signs its own work.
+- Owner authorization is scoped and revocable; authorization does not erase authorship.
+- Agent model requests can run on another community member's machine.
+- BUZZ introduces authorized peers, then encrypted model traffic travels directly between them instead of sending prompts through the BUZZ server.
+- Live telemetry and cancellation use ephemeral encrypted messages.
+- Memory and cost records are encrypted but durable.
+- The server sees routing metadata, not encrypted payloads.
+- BUZZ includes Git hosting and early forge UI.
+- Git repositories are stored as immutable, content-addressed packfiles plus one mutable manifest pointer.
+- A push writes objects first, then advances the manifest pointer with conditional compare-and-swap; the pointer update is the commit point.
+- Workspace events announce Git changes but do not define them.
+- BUZZ's object-storage Git protocol was specified in TLA+ and model-checked for durability, reconstruction, and concurrent pushes.
+- Device pairing uses encrypted exchange over BUZZ, started by QR secret and confirmed by matching six-digit codes.
+- Intended workflow: feature/bug creates a short-lived channel; lead agent delegates to cheaper/faster workers; discussion, patches, CI, review, and signed merge decision share one record; the channel closes when the work closes and preserves the reason.
+
+Updated strategic read:
+
+BUZZ is not merely chat + agents. It is aiming to be a sovereign multiplayer engineering/work substrate:
+
+```text
+room + signed identity + agents + Git + workflow + durable context + audit trail
+```
+
+For M2I, this strengthens the long-term alignment:
+
+- M2I challenge rooms could eventually live inside a BUZZ-style workspace.
+- Agents could help from signed, scoped identities.
+- Encrypted model/telemetry design supports the bot-blind philosophy.
+- Git/workflow integration is useful for agent-built project rooms, but not necessary for Runner 2 alpha.
+
+Unchanged privacy conclusion:
+
+BUZZ's encrypted peer/model traffic does not automatically prove that ordinary room/channel payloads are group-private from relay/operator or in-room agents. Until that is proven, M2I should keep its own encrypted private proof event boundary.

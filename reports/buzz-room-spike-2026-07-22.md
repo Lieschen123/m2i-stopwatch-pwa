@@ -80,3 +80,42 @@ Build `private-proof-events.js` next:
 - emit signed redacted status after local reduce
 
 This keeps BUZZ as an adapter, not the source of M2I truth.
+
+## Additional BUZZ launch-post notes from Nono (2026-07-22)
+
+Nono shared a longer BUZZ launch/article excerpt with several details beyond the initial source scan.
+
+Important additions:
+
+- BUZZ verifies agent signatures instead of trusting network addresses.
+- Agents have their own keys; owner authorization does not erase agent authorship.
+- Agent authorization is narrowly scoped and revocable.
+- Removing the owner prevents the agent from reconnecting; immediate risk can terminate active sessions too.
+- Agent model requests can run on another community member's machine.
+- BUZZ introduces authorized peers, then encrypted model traffic travels directly between them, avoiding prompt transit through the BUZZ server.
+- Live telemetry and cancellation are ephemeral encrypted messages.
+- Memory and cost records are encrypted but durable.
+- Server sees routing metadata, not those encrypted payloads.
+- BUZZ includes Git hosting / early forge UI, not just chat and agents.
+- Repositories are stored as immutable content-addressed packfiles plus one mutable manifest pointer.
+- Pushes write objects first, then advance the pointer via conditional compare-and-swap; that pointer update is the commit point.
+- Workspace events announce Git changes but do not define them.
+- BUZZ specified the Git object-storage protocol in TLA+ and model-checked durability, reconstruction, and concurrent pushes.
+- Device pairing uses encrypted exchange over BUZZ, started by QR secret and confirmed by matching six-digit codes.
+- Intended workflow: feature/bug gets a short-lived channel; lead agent delegates to cheaper/faster workers; discussion, patches, CI, review, and signed merge decision share one record; channel closes when work closes, and the reason survives.
+
+Strategic update:
+
+BUZZ is more ambitious than “Slack with agents.” It is closer to a sovereign project/workspace substrate:
+
+```text
+room + signed identities + agents + durable memory + Git + workflow + audit trail
+```
+
+For M2I this increases strategic alignment for future workrooms, but does not change the current Runner 2 conclusion: BUZZ is still too heavy/early for immediate alpha onboarding. Our local M2I private-room architecture remains valuable because it defines the private proof boundary independently of BUZZ.
+
+M2I implication:
+
+- BUZZ could eventually host a full M2I repeated-game workspace: room, agent, signed status, encrypted proof payloads, project history, code/workflow state.
+- BUZZ's own encrypted telemetry/model traffic pattern supports our bot-blind direction conceptually.
+- But we still need to verify whether ordinary channel payloads can provide group-private proof secrecy, or whether M2I-encrypted proof events remain necessary.
